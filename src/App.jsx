@@ -176,7 +176,7 @@ VIDEO: D-Log M colour for grading flexibility (needs post work). Normal for dire
 SIMPLICITY: For someone learning, Auto photo + Normal colour + no ND is totally valid. Pro mode and D-Log M worth trying on controlled sunny days.`;
 
 /* ─── STYLES / TOKENS ─── */
-const FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=DotGothic16&display=swap";
+const FONTS = "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap";
 
 const T = {
   bg:        "#0c0a08",
@@ -184,8 +184,8 @@ const T = {
   surface:   "#141210",
   surfaceHi: "#1c1814",
   surfaceAc: "#231d16",
-  stroke:    "rgba(255, 240, 220, 0.06)",
-  strokeHi:  "rgba(232, 208, 160, 0.18)",
+  stroke:    "rgba(255, 240, 220, 0.04)",
+  strokeHi:  "rgba(232, 208, 160, 0.12)",
   strokeAct: "rgba(232, 208, 160, 0.38)",
   gold:      "#e8d0a0",
   goldSoft:  "#c8b088",
@@ -202,7 +202,7 @@ const T = {
   violet:    "#a898c8",
 };
 
-const FONT_DISPLAY = "'DotGothic16', monospace";
+const FONT_DISPLAY = "'Inter', sans-serif";
 const FONT_MONO    = "'JetBrains Mono', monospace";
 const FONT_SANS    = "'Inter', sans-serif";
 
@@ -708,9 +708,14 @@ function PinsPanel({ pins, setPins, activePinId, setActivePinId, onClose }) {
 // Flat surfaces replace the previous glassy blur panels.
 // API is identical (variant: "base" | "lite" | "bri") so all callers keep working.
 const glass = (variant = "base") => ({
-  background: variant === "bri" ? T.surfaceHi : variant === "lite" ? T.surface : T.surface,
+  background: variant === "bri" ? "rgba(28, 24, 20, 0.65)" :
+               variant === "lite" ? "rgba(20, 18, 16, 0.4)" :
+               "rgba(20, 18, 16, 0.55)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
   border: `1px solid ${variant === "bri" ? T.strokeHi : T.stroke}`,
   borderRadius: 14,
+  boxShadow: "0 4px 24px -8px rgba(0,0,0,0.4)",
 });
 const surface = glass; // alias for new-style callers
 
@@ -1877,6 +1882,9 @@ export default function App() {
         ::-webkit-scrollbar-thumb { background: ${T.stroke}; border-radius: 4px }
         ::-webkit-scrollbar-thumb:hover { background: ${T.strokeHi} }
         button { font-family: inherit }
+        button { transition: all 0.2s ease; }
+        button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
+        button:active:not(:disabled) { transform: translateY(1px); filter: brightness(0.95); }
       `}</style>
 
       <AtmoBg />

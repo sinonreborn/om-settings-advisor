@@ -157,9 +157,9 @@ SYNC IS LENSES (8.5 stops): 12-40 f/2.8 PRO II, 12-100 f/4 IS PRO, 100-400 IS, 1
 
 TELECONVERTERS: MC-14 (1 stop penalty), MC-20 (2 stop penalty). Compatible only with 40-150 f/2.8 PRO, 40-150 f/4 PRO, 100-400 IS, 150-400 IS PRO, 300mm f/4 IS PRO, 90mm Macro IS PRO. Strictly sunny-day use for the 100-400 + MC-20 (f/10-12.6 at long end).
 
-HIGH ISO: James has confirmed OM-1 II handles ISO 32000-40000 cleanly when processed through Lightroom AI Denoise on M4 Max Mac. Do not conservatively cap ISO at 6400.
+HIGH ISO: The OM-1 II handles ISO 32000-40000 cleanly when processed through modern AI denoise tools (e.g. Lightroom's AI Denoise). Do not conservatively cap ISO at 6400.
 
-APERTURE PRAGMATICS (for James): f/1.2 DoF too shallow for reliable hits on moving subjects. f/2 is the default for action at f/1.2 primes; f/1.2 reserved for static deliberate shots.`;
+APERTURE PRAGMATICS: f/1.2 DoF is too shallow for reliable hits on moving subjects. f/2 is the pragmatic default for action when using f/1.2 primes; f/1.2 is best reserved for static deliberate shots.`;
 
 const KB_DJI = `DJI Mini 4 Pro reference:
 - 1/1.3" sensor, 24mm equiv f/1.7 fixed aperture
@@ -321,6 +321,56 @@ function useActivePin(pins) {
   return [active, setActiveId];
 }
 
+/* ─── HISTORY + FAVOURITES STORAGE ─── */
+const HISTORY_KEY = "om-advisor-history-v1";
+const FAVS_KEY = "om-advisor-favs-v1";
+const HISTORY_LIMIT = 20;
+
+function useHistory() {
+  const [history, setHistoryState] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(HISTORY_KEY));
+      return Array.isArray(s) ? s : [];
+    } catch { return []; }
+  });
+  const addEntry = useCallback((entry) => {
+    setHistoryState((prev) => {
+      const next = [entry, ...prev].slice(0, HISTORY_LIMIT);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+  const removeEntry = useCallback((id) => {
+    setHistoryState((prev) => {
+      const next = prev.filter(e => e.id !== id);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+  const clearHistory = useCallback(() => {
+    setHistoryState([]);
+    try { localStorage.removeItem(HISTORY_KEY); } catch {}
+  }, []);
+  return [history, addEntry, removeEntry, clearHistory];
+}
+
+function useFavourites() {
+  const [favs, setFavsState] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(FAVS_KEY));
+      return Array.isArray(s) ? s : [];
+    } catch { return []; }
+  });
+  const toggleFav = useCallback((id) => {
+    setFavsState((prev) => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      try { localStorage.setItem(FAVS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+  return [favs, toggleFav];
+}
+
 /* ─── MAPLIBRE LAZY LOADER ─── */
 let mapLibrePromise = null;
 function loadMapLibre() {
@@ -349,10 +399,11 @@ function loadMapLibre() {
 }
 
 /* ─── MAP PANEL ─── */
-function MapPanel({ center, pins, activePin, onSelectPin, onAddPin, weather, onOpenPins }) {
+function MapPanel({ center, userLocation, pins, activePin, onSelectPin, onAddPin, weather, onOpenPins }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
+  const userMarkerRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
 
@@ -430,6 +481,28 @@ function MapPanel({ center, pins, activePin, onSelectPin, onAddPin, weather, onO
       markersRef.current.push(marker);
     });
   }, [pins, activePin?.id, ready, onSelectPin]);
+
+  // Render/update user-location pulse marker
+  useEffect(() => {
+    if (!ready || !mapRef.current || !window.maplibregl) return;
+    if (userMarkerRef.current) { try { userMarkerRef.current.remove(); } catch {} userMarkerRef.current = null; }
+    if (!userLocation) return;
+    const el = document.createElement("div");
+    el.className = "om-user-loc";
+    el.style.cssText = `
+      position: relative; width: 18px; height: 18px;
+    `;
+    // Inner solid dot + outer pulsing ring, both via CSS
+    el.innerHTML = `
+      <div style="position:absolute; inset:0; border-radius:50%; background:#4da3ff; border:2px solid #ffffff; box-shadow:0 1px 4px rgba(0,0,0,0.5); z-index:2;"></div>
+      <div style="position:absolute; inset:-6px; border-radius:50%; background:rgba(77,163,255,0.35); animation:om-pulse 2.2s ease-out infinite; z-index:1;"></div>
+    `;
+    el.title = "Your location";
+    const marker = new window.maplibregl.Marker({ element: el })
+      .setLngLat([userLocation.lon, userLocation.lat])
+      .addTo(mapRef.current);
+    userMarkerRef.current = marker;
+  }, [userLocation?.lat, userLocation?.lon, ready]);
 
   // Build overlay: sun direction indicator + wind arrow
   const hasSun = sun.altitude > -6;
@@ -697,6 +770,175 @@ function PinsPanel({ pins, setPins, activePinId, setActivePinId, onClose }) {
               </div>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── HISTORY PANEL ─── */
+function formatRelTime(ts) {
+  const diff = Date.now() - ts;
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.round(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
+function describeEntry(entry) {
+  // Build a short human-readable scenario summary
+  if (entry.device === "om1") {
+    const modeLabel = entry.mode ? entry.mode.charAt(0).toUpperCase() + entry.mode.slice(1) : "";
+    const sel = entry.sel || {};
+    const subjectId = sel.animal || sel.bird || sel.land || sel.macro || sel.portrait || sel.night;
+    const behId = sel.beh || sel.birdSc;
+    const parts = [];
+    if (modeLabel) parts.push(modeLabel);
+    if (subjectId) parts.push(subjectId);
+    if (behId) parts.push(behId);
+    return parts.join(" · ");
+  } else {
+    const sel = entry.sel || {};
+    const parts = [];
+    if (entry.mode) parts.push(entry.mode);
+    if (sel.djiOutput) parts.push(sel.djiOutput);
+    return parts.join(" · ");
+  }
+}
+
+function HistoryPanel({ history, favs, toggleFav, removeEntry, clearHistory, onOpen, onClose }) {
+  const [tab, setTab] = useState("recent"); // "recent" | "favs"
+  const favsList = history.filter(h => favs.includes(h.id));
+  const list = tab === "recent" ? history : favsList;
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(5, 5, 8, 0.85)", backdropFilter: "blur(12px)",
+      display: "flex", flexDirection: "column",
+    }}>
+      <div style={{
+        maxWidth: 600, width: "100%", margin: "0 auto",
+        flex: 1, display: "flex", flexDirection: "column", overflow: "hidden",
+      }}>
+        <div style={{ padding: "22px 20px 0", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: FONT_SANS, letterSpacing: "-0.02em" }}>History</div>
+              <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, fontFamily: FONT_MONO }}>
+                {history.length} recent · {favsList.length} favourite{favsList.length === 1 ? "" : "s"}
+              </div>
+            </div>
+            <button onClick={onClose} style={{
+              ...glass("bri"),
+              padding: "8px 18px", borderRadius: 10,
+              color: T.gold, fontSize: 12, cursor: "pointer",
+              fontFamily: FONT_SANS, fontWeight: 600,
+              borderColor: T.strokeAct,
+            }}>Done</button>
+          </div>
+
+          {/* Tab switcher */}
+          <div style={{
+            ...glass("lite"), padding: 3, display: "flex", gap: 2,
+            borderRadius: 10, marginBottom: 12,
+          }}>
+            <button onClick={() => setTab("recent")} style={{
+              flex: 1, padding: "8px 10px", cursor: "pointer",
+              background: tab === "recent" ? `${T.gold}20` : "transparent",
+              border: "none", borderRadius: 8,
+              color: tab === "recent" ? T.gold : T.textMid,
+              fontSize: 12, fontWeight: 600, fontFamily: FONT_SANS,
+            }}>Recent ({history.length})</button>
+            <button onClick={() => setTab("favs")} style={{
+              flex: 1, padding: "8px 10px", cursor: "pointer",
+              background: tab === "favs" ? `${T.gold}20` : "transparent",
+              border: "none", borderRadius: 8,
+              color: tab === "favs" ? T.gold : T.textMid,
+              fontSize: 12, fontWeight: 600, fontFamily: FONT_SANS,
+            }}>♥ Favourites ({favsList.length})</button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, overflow: "auto", padding: "0 20px 20px" }}>
+          {list.length === 0 && (
+            <div style={{
+              padding: "40px 20px", textAlign: "center",
+              color: T.textDim, fontSize: 13, lineHeight: 1.6,
+            }}>
+              {tab === "recent"
+                ? "No queries yet. Run your first one and it'll show up here."
+                : "No favourites yet. Tap ♡ on any result to save it."}
+            </div>
+          )}
+          {list.map(e => {
+            const isFav = favs.includes(e.id);
+            const deviceBadge = e.device === "om1" ? "OM-1" : "DJI";
+            const desc = describeEntry(e);
+            return (
+              <div key={e.id} style={{
+                ...glass("base"),
+                padding: 12, marginBottom: 6, borderRadius: 10,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button onClick={() => onOpen(e)} style={{
+                    flex: 1, background: "transparent", border: "none",
+                    textAlign: "left", cursor: "pointer", padding: 0, minWidth: 0,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                      <span style={{
+                        fontSize: 9, padding: "2px 7px", borderRadius: 4,
+                        background: e.device === "om1" ? `${T.gold}20` : `${T.blu}20`,
+                        color: e.device === "om1" ? T.gold : T.blu,
+                        fontFamily: FONT_MONO, fontWeight: 600, letterSpacing: "0.08em",
+                      }}>{deviceBadge}</span>
+                      <span style={{ fontSize: 10, color: T.textDim, fontFamily: FONT_MONO }}>
+                        {formatRelTime(e.ts)}
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: 14, fontWeight: 600, color: T.text,
+                      fontFamily: FONT_SANS, letterSpacing: "-0.01em",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {e.result?.preset_name || "Untitled preset"}
+                    </div>
+                    <div style={{
+                      fontSize: 11, color: T.textMid, marginTop: 2,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                    }}>
+                      {desc}{e.locationLabel ? ` · ${e.locationLabel}` : ""}
+                    </div>
+                  </button>
+                  <button onClick={() => toggleFav(e.id)} style={{
+                    padding: "8px 10px", ...glass("lite"), borderRadius: 8, cursor: "pointer",
+                    color: isFav ? T.red : T.textDim, fontSize: 16,
+                    borderColor: isFav ? `${T.red}40` : T.stroke,
+                  }} title={isFav ? "Unfavourite" : "Favourite"}>
+                    {isFav ? "♥" : "♡"}
+                  </button>
+                  <button onClick={() => removeEntry(e.id)} style={{
+                    padding: "8px 10px", ...glass("lite"), borderRadius: 8, cursor: "pointer",
+                    color: T.textDim, fontSize: 14,
+                  }} title="Remove from history">×</button>
+                </div>
+              </div>
+            );
+          })}
+
+          {tab === "recent" && history.length > 0 && (
+            <div style={{ textAlign: "center", marginTop: 16 }}>
+              <button onClick={() => { if (confirm("Clear all history? Favourites will stay.")) clearHistory(); }} style={{
+                ...glass("lite"), padding: "8px 16px", borderRadius: 8, cursor: "pointer",
+                color: T.textDim, fontSize: 11, fontFamily: FONT_SANS,
+              }}>Clear all recent</button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1805,12 +2047,16 @@ export default function App() {
   const [kit, setKit] = usePersistedKit();
   const [showKit, setShowKit] = useState(false);
   const [showPins, setShowPins] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, addHistoryEntry, removeHistoryEntry, clearHistory] = useHistory();
+  const [favs, toggleFav] = useFavourites();
   const [device, setDevice] = useState("om1");
 
   // Location / pins
   const [pins, setPins] = usePins();
   const [activePin, setActivePinId] = useActivePin(pins);
   const [geoCenter, setGeoCenter] = useState(DEFAULT_LOCATION);
+  const [userLocation, setUserLocation] = useState(null); // { lat, lon } or null — where the GPS says you are
   const [geoRequested, setGeoRequested] = useState(false);
 
   // Ask for geolocation once on mount
@@ -1820,10 +2066,12 @@ export default function App() {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setGeoCenter({ lat: pos.coords.latitude, lon: pos.coords.longitude, label: "Your location" });
+        const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        setGeoCenter({ ...coords, label: "Your location" });
+        setUserLocation(coords);
       },
-      () => { /* denied or failed: keep Stockport default */ },
-      { timeout: 8000, maximumAge: 60000, enableHighAccuracy: false }
+      () => { /* denied or failed: keep Stockport default, no user marker */ },
+      { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1882,7 +2130,7 @@ export default function App() {
   }, [activePin?.id, activePin?.lat, activePin?.lon, geoCenter.lat, geoCenter.lon]);
 
   function resetScenario() {
-    setResult(null); setErr(null);
+    setResult(null); setErr(null); setViewingEntry(null);
     setAnimal(""); setBeh(""); setBird(""); setBirdSc("");
     setLand(""); setMacro(""); setPortrait(""); setNight("");
     setDjiOutput("");
@@ -1910,15 +2158,19 @@ export default function App() {
     return false;
   }
 
+  // Track the currently-displayed history entry (if the result was loaded from history rather than freshly generated)
+  const [viewingEntry, setViewingEntry] = useState(null);
+
   async function go() {
-    setLoading(true); setErr(null); setResult(null);
+    setLoading(true); setErr(null); setResult(null); setViewingEntry(null);
     const forecastInfo = analyzeForecast(forecast, weather);
     let prompt;
+    const sel = device === "om1"
+      ? { animal, beh, bird, birdSc, land, macro, portrait, night }
+      : { djiMode, djiOutput, djiComplexity };
     if (device === "om1") {
-      const sel = { animal, beh, bird, birdSc, land, macro, portrait, night };
       prompt = buildOMPrompt(omMode, sel, weather, extra, kit, mounted, tc);
     } else {
-      const sel = { djiMode, djiOutput, djiComplexity };
       prompt = buildDJIPrompt(djiMode, sel, weather, extra, forecastInfo);
     }
     try {
@@ -1931,13 +2183,61 @@ export default function App() {
       const d = await res.json();
       const txt = d.text || "";
       const clean = txt.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-      setResult(JSON.parse(clean));
+      const parsed = JSON.parse(clean);
+      setResult(parsed);
+      // Save to history — a compact snapshot so we can reopen later
+      const entry = {
+        id: "h_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6),
+        ts: Date.now(),
+        device,
+        mode: device === "om1" ? omMode : djiMode,
+        sel,
+        extra,
+        mounted: device === "om1" ? mounted : null,
+        tc: device === "om1" ? tc : null,
+        result: parsed,
+        weatherSnap: weather ? {
+          temperature: weather.temperature,
+          weathercode: weather.weathercode,
+          windspeed: weather.windspeed,
+          winddirection: weather.winddirection,
+          is_day: weather.is_day,
+        } : null,
+        locationLabel: activePin?.label || geoCenter.label || "",
+      };
+      addHistoryEntry(entry);
     } catch (e) {
       console.error(e);
       setErr("Something went wrong — try again.");
     } finally {
       setLoading(false);
     }
+  }
+
+  function openHistoryEntry(entry) {
+    // Restore the inputs so Re-run works with identical scenario
+    setDevice(entry.device);
+    if (entry.device === "om1") {
+      setOmMode(entry.mode);
+      setAnimal(entry.sel.animal || "");
+      setBeh(entry.sel.beh || "");
+      setBird(entry.sel.bird || "");
+      setBirdSc(entry.sel.birdSc || "");
+      setLand(entry.sel.land || "");
+      setMacro(entry.sel.macro || "");
+      setPortrait(entry.sel.portrait || "");
+      setNight(entry.sel.night || "");
+      setMounted(entry.mounted || null);
+      setTc(entry.tc || "none");
+    } else {
+      setDjiMode(entry.mode);
+      setDjiOutput(entry.sel.djiOutput || "");
+      setDjiComplexity(entry.sel.djiComplexity || "easy");
+    }
+    setExtra(entry.extra || "");
+    setResult(entry.result);
+    setViewingEntry(entry);
+    setShowHistory(false);
   }
 
   useEffect(() => {
@@ -1961,6 +2261,10 @@ export default function App() {
         @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.5 } }
+        @keyframes om-pulse {
+          0% { transform: scale(0.6); opacity: 0.9; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
         ::selection { background: ${T.gold}40; color: ${T.text} }
         * { box-sizing: border-box }
         body { margin: 0; background: ${T.bg}; color: ${T.text}; }
@@ -1984,6 +2288,7 @@ export default function App() {
 
       {showKit && <KitPanel kit={kit} setKit={setKit} onClose={() => setShowKit(false)}/>}
       {showPins && <PinsPanel pins={pins} setPins={setPins} activePinId={activePin?.id} setActivePinId={setActivePinId} onClose={() => setShowPins(false)}/>}
+      {showHistory && <HistoryPanel history={history} favs={favs} toggleFav={toggleFav} removeEntry={removeHistoryEntry} clearHistory={clearHistory} onOpen={openHistoryEntry} onClose={() => setShowHistory(false)}/>}
 
       {/* HEADER */}
       <header style={{
@@ -2030,6 +2335,18 @@ export default function App() {
                 </span>
               </div>
             )}
+            <button onClick={() => setShowHistory(true)} title="History & favourites" style={{
+              background: T.surface,
+              border: `1px solid ${T.stroke}`,
+              padding: "6px 10px", cursor: "pointer",
+              borderRadius: 12,
+              display: "flex", alignItems: "center", gap: 4,
+              fontFamily: FONT_MONO,
+              fontSize: 10, color: T.textMid,
+            }}>
+              <span style={{ fontSize: 12 }}>♡</span>
+              {history.length > 0 && <span>{history.length}</span>}
+            </button>
             <button onClick={() => setShowKit(true)} style={{
               background: !kit.length ? T.surfaceHi : T.surface,
               border: `1px solid ${!kit.length ? T.strokeAct : T.stroke}`,
@@ -2079,6 +2396,7 @@ export default function App() {
             <div style={{ marginBottom: 16 }}>
               <MapPanel
                 center={geoCenter}
+                userLocation={userLocation}
                 pins={pins}
                 activePin={activePin}
                 onSelectPin={(id) => setActivePinId(id)}
@@ -2190,25 +2508,89 @@ export default function App() {
             )}
 
             {/* RESULT */}
-            {result && (
-              <div ref={resultRef} style={{ marginTop: 28, animation: "fadeUp .4s ease" }}>
-                <div style={{
-                  height: 1, marginBottom: 18,
-                  background: `linear-gradient(90deg, transparent, ${T.gold}30, transparent)`,
-                }} />
-                {device === "om1"
-                  ? <OMResult result={result} />
-                  : <DJIResult result={result} isVideo={isDJIVideo} />}
-                <div style={{ textAlign: "center", marginTop: 20 }}>
-                  <button onClick={() => { setResult(null); setErr(null); }} style={{
-                    ...glass("lite"),
-                    padding: "10px 24px", borderRadius: 10,
-                    color: T.textDim, fontSize: 12, cursor: "pointer",
-                    fontFamily: "'Inter', sans-serif",
-                  }}>Dismiss result</button>
+            {result && (() => {
+              // Which history entry does this result correspond to?
+              // Fresh queries become history[0]. Opened-from-history uses viewingEntry.
+              const currentEntry = viewingEntry || history[0] || null;
+              const currentEntryId = currentEntry?.id;
+              const isFromHistory = !!viewingEntry;
+              const isFav = currentEntryId && favs.includes(currentEntryId);
+
+              // Build snapshot description for the banner
+              const snapDesc = (() => {
+                if (!isFromHistory || !viewingEntry) return null;
+                const s = viewingEntry.weatherSnap;
+                if (!s) return formatRelTime(viewingEntry.ts);
+                const label = parseW(s).label;
+                const t = Math.round(s.temperature);
+                const wind = Math.round(s.windspeed);
+                return `${formatRelTime(viewingEntry.ts)} · ${label} ${t}°C · ${wind}mph wind`;
+              })();
+
+              return (
+                <div ref={resultRef} style={{ marginTop: 28, animation: "fadeUp .4s ease" }}>
+                  <div style={{
+                    height: 1, marginBottom: 18,
+                    background: `linear-gradient(90deg, transparent, ${T.gold}30, transparent)`,
+                  }} />
+
+                  {/* History-view banner */}
+                  {isFromHistory && snapDesc && (
+                    <div style={{
+                      ...glass("lite"),
+                      padding: "10px 14px", borderRadius: 10, marginBottom: 12,
+                      display: "flex", alignItems: "center", gap: 10,
+                      borderColor: `${T.blu}20`, background: `${T.blu}08`,
+                    }}>
+                      <span style={{ fontSize: 14 }}>🕘</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 10, color: T.blu, fontFamily: FONT_MONO, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>From history</div>
+                        <div style={{ fontSize: 11, color: T.textMid, marginTop: 2, fontFamily: FONT_MONO }}>{snapDesc}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Heart button row */}
+                  {currentEntryId && (
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -6, position: "relative", zIndex: 2 }}>
+                      <button onClick={() => toggleFav(currentEntryId)} style={{
+                        ...glass("bri"),
+                        padding: "6px 12px", borderRadius: 20, cursor: "pointer",
+                        color: isFav ? T.red : T.textMid,
+                        fontSize: 15, fontFamily: FONT_SANS,
+                        borderColor: isFav ? `${T.red}40` : T.strokeHi,
+                        display: "flex", alignItems: "center", gap: 6,
+                      }} title={isFav ? "Remove from favourites" : "Save to favourites"}>
+                        {isFav ? "♥" : "♡"}
+                        <span style={{ fontSize: 11, fontWeight: 600 }}>{isFav ? "Saved" : "Save"}</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {device === "om1"
+                    ? <OMResult result={result} />
+                    : <DJIResult result={result} isVideo={isDJIVideo} />}
+
+                  {/* Action row — Re-run (if from history) + Dismiss */}
+                  <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
+                    {isFromHistory && canGo() && (
+                      <button onClick={go} style={{
+                        padding: "10px 20px", border: "none", borderRadius: 10,
+                        background: `linear-gradient(135deg, ${T.gold}, ${T.amber})`,
+                        color: T.bgWarm, fontSize: 12, fontWeight: 700,
+                        cursor: "pointer", fontFamily: FONT_SANS,
+                      }}>Re-run with current conditions</button>
+                    )}
+                    <button onClick={() => { setResult(null); setErr(null); setViewingEntry(null); }} style={{
+                      ...glass("lite"),
+                      padding: "10px 24px", borderRadius: 10,
+                      color: T.textDim, fontSize: 12, cursor: "pointer",
+                      fontFamily: "'Inter', sans-serif",
+                    }}>Dismiss</button>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         )}
       </main>

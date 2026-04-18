@@ -166,8 +166,8 @@ const KB_DJI = `DJI Mini 4 Pro reference:
 - Shutter 1/16000s electronic to 2s
 - 4K/100fps, 1080p/200fps slow-mo
 - Takeoff weight under 249g (no registration most jurisdictions)
-- Wind resistance: level 5 (up to 10.7 m/s ≈ 38 km/h)
-- Do not fly above 20 km/h sustained wind (risky), grounded above 30 km/h
+- Wind resistance: level 5 (up to 10.7 m/s ≈ 24 mph)
+- Do not fly above 12 mph sustained wind (risky), grounded above 19 mph (or gusts above 22 mph)
 
 PHOTO: Auto (default), Pro (manual controls). AEB bracket for HDR scenes. Panorama modes: Sphere, 180°, Wide-angle, Vertical.
 
@@ -438,7 +438,7 @@ function MapPanel({ center, pins, activePin, onSelectPin, onAddPin, weather, onO
 
   return (
     <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", ...glass("bri"), padding: 0 }}>
-      <div ref={containerRef} style={{ width: "100%", height: 260, background: "#0a0a0c" }} />
+      <div ref={containerRef} className="om-map-container" style={{ width: "100%", height: 260, background: "#0a0a0c" }} />
 
       {/* Loading overlay */}
       {!ready && !error && (
@@ -487,8 +487,7 @@ function MapPanel({ center, pins, activePin, onSelectPin, onAddPin, weather, onO
             color: T.textDim, fontFamily: "'JetBrains Mono', monospace", marginBottom: 1,
           }}>{activePin ? "active pin" : "viewing"}</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {activePin?.label || "Unnamed"}
-            {!activePin && (center.label || "Stockport")}
+            {activePin ? (activePin.label || "Unnamed") : (center.label || "Stockport")}
           </div>
         </div>
         <button onClick={onOpenPins} style={{
@@ -571,7 +570,7 @@ function MapPanel({ center, pins, activePin, onSelectPin, onAddPin, weather, onO
                   Wind
                 </div>
                 <div style={{ fontSize: 13, color: T.blu, fontFamily: FONT_DISPLAY, lineHeight: 1.1, marginTop: 2 }}>
-                  {compassDir(wind.dir)} {Math.round(wind.speed)}km/h
+                  {compassDir(wind.dir)} {Math.round(wind.speed)}mph
                 </div>
               </div>
             </div>
@@ -767,6 +766,7 @@ function analyzeForecast(forecast, currentWeather) {
       code: forecast.weathercode[i],
       temp: Math.round(forecast.temperature_2m[i]),
       wind: Math.round(forecast.windspeed_10m[i]),
+      gust: Math.round(forecast.windgusts_10m?.[i] || 0),
       cloud: forecast.cloudcover[i],
       rainProb: forecast.precipitation_probability?.[i] || 0,
       isDay: forecast.is_day?.[i] || 1,
@@ -780,8 +780,14 @@ function analyzeForecast(forecast, currentWeather) {
   const goldenStart = Math.floor(sunsetApprox - 1);
   const goldenMin = Math.round((sunsetApprox - 1 - goldenStart) * 60);
   const windNow = currentWeather?.windspeed || 0;
-  const droneStatus = windNow >= 30 ? "grounded" : windNow >= 20 ? "risky" : "good";
-  return { upcoming, nextSun, nextRain, goldenStart, goldenMin, sunsetApprox, droneStatus };
+  // Current gust = upcoming[0].gust if available, else fall back to sustained wind
+  const gustNow = upcoming[0]?.gust || windNow;
+  // Drone status now factors in gusts, which matter more than sustained wind for flights
+  // Thresholds in mph: 12mph sustained / 16mph gust = risky; 19mph sustained / 22mph gust = grounded
+  const droneStatus = (gustNow >= 22 || windNow >= 19) ? "grounded"
+                     : (gustNow >= 16 || windNow >= 12) ? "risky"
+                     : "good";
+  return { upcoming, nextSun, nextRain, goldenStart, goldenMin, sunsetApprox, droneStatus, gustNow, windNow };
 }
 
 function formatHour(h) {
@@ -833,7 +839,7 @@ function WeatherOrb({ weather }) {
 }
 
 /* ─── CONDITIONS DASHBOARD ─── */
-function ConditionsDash({ weather, forecast, weatherLive, locationLabel }) {
+function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device }) {
   if (!weather) return (
     <div style={{ ...glass(), padding: "36px 20px", textAlign: "center" }}>
       <div style={{
@@ -863,36 +869,93 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel }) {
 
   const droneColour = info?.droneStatus === "good" ? T.grn : info?.droneStatus === "risky" ? T.wrn : T.red;
   const droneLabel  = info?.droneStatus === "good" ? "Good to fly" : info?.droneStatus === "risky" ? "Risky" : "Grounded";
-  const droneDetail = info?.droneStatus === "good" ? "Conditions look fine" : info?.droneStatus === "risky" ? "Flyable, expect drift" : `${wind}km/h — too gusty`;
+
+  const gustNow = info?.gustNow || wind;
+  const isGustyAlert = gustNow >= 19;
+  const isRainy = weather.weathercode >= 51 && weather.weathercode <= 67;
+
+  const isDrone = device === "dji";
 
   return (
     <div>
-      {/* PRIMARY — hero glass panel */}
-      <GlassCard variant="bri" style={{ padding: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <WeatherOrb weather={weather} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
-              <div style={{
-                fontFamily: FONT_DISPLAY, fontWeight: 400,
-                fontSize: 42, color: T.text, lineHeight: 1,
-              }}>{temp}°</div>
-              <div style={{
-                fontSize: 11, padding: "2px 8px", borderRadius: 10,
-                background: weatherLive ? `${T.grn}18` : `${T.wrn}18`,
-                color: weatherLive ? T.grn : T.wrn,
-                fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
-              }}>{weatherLive ? "● LIVE" : "◌ SNAPSHOT"}</div>
-            </div>
-            <div style={{ fontSize: 13, color: T.textMid, marginBottom: 6 }}>{wi.label} · {locationLabel || "Location"}</div>
-            <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textDim, fontFamily: "'JetBrains Mono', monospace" }}>
-              <span><span style={{ color: lightColor }}>●</span> {lightLabel}</span>
-              <span><span style={{ color: wind > 30 ? T.red : wind > 20 ? T.wrn : T.grn }}>●</span> {wind} km/h</span>
-              <span><span style={{ color: droneColour }}>●</span> 🚁 {droneLabel}</span>
+      {/* PRIMARY HERO — device-aware */}
+      {isDrone ? (
+        /* DJI hero: wind + gust primary, sky condition & temp as secondary */
+        <GlassCard variant="bri" style={{ padding: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <WeatherOrb weather={weather} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, color: T.textMid, marginBottom: 6 }}>
+                {wi.label} · {locationLabel || "Location"}
+                {isRainy && <span style={{ color: T.red, marginLeft: 8, fontWeight: 600 }}>· Rain</span>}
+              </div>
+              {/* Big wind/gust readout */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: T.textDim, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.14em", textTransform: "uppercase" }}>Gust</div>
+                  <div style={{ fontSize: 36, fontWeight: 700, color: gustNow >= 22 ? T.red : gustNow >= 16 ? T.wrn : T.text, lineHeight: 1, letterSpacing: "-0.02em" }}>
+                    {gustNow}<span style={{ fontSize: 14, color: T.textMid, fontWeight: 500, marginLeft: 3 }}>mph</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, color: T.textDim, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.14em", textTransform: "uppercase" }}>Wind</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, color: T.textMid, lineHeight: 1, letterSpacing: "-0.01em" }}>
+                    {wind}<span style={{ fontSize: 11, color: T.textDim, fontWeight: 500, marginLeft: 2 }}>mph</span>
+                  </div>
+                </div>
+                <div style={{ marginLeft: "auto" }}>
+                  <div style={{
+                    fontSize: 10, padding: "4px 10px", borderRadius: 12,
+                    background: `${droneColour}20`, color: droneColour,
+                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
+                    display: "inline-flex", alignItems: "center", gap: 5,
+                  }}>🚁 {droneLabel}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 12, fontSize: 11, color: T.textDim, fontFamily: "'JetBrains Mono', monospace", marginTop: 8 }}>
+                <span>{temp}°C</span>
+                <span>·</span>
+                <span>{weatherLive ? "● LIVE" : "◌ snapshot"}</span>
+              </div>
             </div>
           </div>
-        </div>
-      </GlassCard>
+        </GlassCard>
+      ) : (
+        /* OM-1 hero: temp primary, gust badge only if gusty */
+        <GlassCard variant="bri" style={{ padding: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <WeatherOrb weather={weather} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+                <div style={{
+                  fontFamily: FONT_DISPLAY, fontWeight: 700,
+                  fontSize: 42, color: T.text, lineHeight: 1, letterSpacing: "-0.02em",
+                }}>{temp}°</div>
+                <div style={{
+                  fontSize: 11, padding: "2px 8px", borderRadius: 10,
+                  background: weatherLive ? `${T.grn}18` : `${T.wrn}18`,
+                  color: weatherLive ? T.grn : T.wrn,
+                  fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
+                }}>{weatherLive ? "● LIVE" : "◌ SNAPSHOT"}</div>
+                {isGustyAlert && (
+                  <div style={{
+                    fontSize: 10, padding: "3px 9px", borderRadius: 10,
+                    background: `${T.red}18`, color: T.red,
+                    fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
+                    letterSpacing: "0.06em",
+                  }}>GUST {gustNow}</div>
+                )}
+              </div>
+              <div style={{ fontSize: 13, color: T.textMid, marginBottom: 6 }}>{wi.label} · {locationLabel || "Location"}</div>
+              <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textDim, fontFamily: "'JetBrains Mono', monospace" }}>
+                <span><span style={{ color: lightColor }}>●</span> {lightLabel}</span>
+                <span><span style={{ color: wind > 19 ? T.red : wind > 12 ? T.wrn : T.grn }}>●</span> {wind} mph</span>
+                <span><span style={{ color: droneColour }}>●</span> 🚁 {droneLabel}</span>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      )}
 
       {/* FORECAST ALERTS */}
       {info && (
@@ -923,8 +986,29 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel }) {
           }}>Next hours</div>
           <div style={{ display: "flex", gap: 2, overflow: "auto", paddingBottom: 2 }}>
             {info.upcoming.slice(0, 10).map((h, i) => {
-              const hw = parseW({ weathercode: h.code, is_day: h.isDay });
               const isNow = i === 0;
+              // Pick icon based on conditions. At night, lean on cloud cover + rain rather than sun-driven codes.
+              const isRainy = h.code >= 51 && h.code <= 67;
+              const isSnowy = h.code >= 71 && h.code <= 77;
+              const isStormy = h.code >= 80;
+              let icon;
+              if (isRainy) icon = "🌧️";
+              else if (isSnowy) icon = "❄️";
+              else if (isStormy) icon = "⛈️";
+              else if (!h.isDay) {
+                // Night: pick based on cloud cover
+                if (h.cloud < 30) icon = "🌙";
+                else if (h.cloud < 70) icon = "☁️";
+                else icon = "☁️";
+              } else {
+                // Day: standard sun-driven
+                if (h.code <= 1) icon = "☀️";
+                else if (h.code <= 3) icon = "⛅";
+                else icon = "☁️";
+              }
+              // Rain % visibility: always show for ≥ 15%, grey below that
+              const showRain = h.rainProb >= 15;
+              const rainColor = h.rainProb >= 60 ? T.red : h.rainProb >= 30 ? T.blu : T.textDim;
               return (
                 <div key={i} style={{
                   flex: "0 0 auto", width: 48, textAlign: "center",
@@ -936,10 +1020,10 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel }) {
                     fontSize: 11, color: isNow ? T.gold : T.textMid,
                     fontFamily: FONT_DISPLAY, lineHeight: 1,
                   }}>{isNow ? "NOW" : formatHour(h.hour)}</div>
-                  <div style={{ fontSize: 16, margin: "5px 0 4px" }}>{h.isDay ? hw.icon : "🌙"}</div>
+                  <div style={{ fontSize: 16, margin: "5px 0 4px" }}>{icon}</div>
                   <div style={{ fontSize: 13, color: T.text, fontFamily: FONT_DISPLAY, lineHeight: 1 }}>{h.temp}°</div>
-                  {h.rainProb > 30 && (
-                    <div style={{ fontSize: 10, color: T.blu, fontFamily: FONT_DISPLAY, marginTop: 3, lineHeight: 1 }}>{h.rainProb}%</div>
+                  {showRain && (
+                    <div style={{ fontSize: 10, color: rainColor, fontFamily: FONT_DISPLAY, marginTop: 3, lineHeight: 1 }}>{h.rainProb}%</div>
                   )}
                 </div>
               );
@@ -972,26 +1056,28 @@ function AlertRow({ icon, colour, text, detail }) {
 function ModeScroller({ modes, selected, onSelect }) {
   return (
     <div style={{
-      display: "flex", gap: 8, overflow: "auto",
-      padding: "4px 2px 12px", scrollSnapType: "x proximity",
+      display: "flex", gap: 6, overflow: "auto",
+      padding: "4px 2px 10px", scrollSnapType: "x proximity",
       scrollbarWidth: "thin", scrollbarColor: `${T.stroke} transparent`,
     }}>
       {modes.map(m => {
         const active = selected === m.id;
         return (
           <button key={m.id} onClick={() => onSelect(m.id)} style={{
-            flex: "0 0 auto", width: 120, scrollSnapAlign: "start",
+            flex: "0 0 auto", width: 104, scrollSnapAlign: "start",
             ...glass(active ? "bri" : "base"),
             border: `1px solid ${active ? T.strokeAct : T.stroke}`,
-            padding: "14px 12px", cursor: "pointer",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            padding: "11px 10px 10px", cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
             fontFamily: "'Inter', sans-serif", transition: "all .15s",
+            opacity: active ? 1 : 0.78,
           }}>
-            <span style={{ fontSize: 26, lineHeight: 1 }}>{m.icon}</span>
+            <span style={{ fontSize: 18, lineHeight: 1, opacity: active ? 1 : 0.7 }}>{m.icon}</span>
             <div style={{
-              fontSize: 12, fontWeight: 600,
+              fontSize: 11, fontWeight: 600,
               color: active ? T.text : T.textMid,
               fontFamily: "'JetBrains Mono', monospace",
+              lineHeight: 1.15, textAlign: "center",
             }}>{m.label}</div>
             <div style={{ fontSize: 9, color: T.textDim, lineHeight: 1.2, textAlign: "center" }}>{m.sub}</div>
           </button>
@@ -1262,7 +1348,7 @@ function buildOMPrompt(mode, sel, weather, extra, kit, mountedId, tcId) {
   const t = weather ? Math.round(weather.temperature) : null;
   const wind = weather ? Math.round(weather.windspeed) : null;
   const ws = weather
-    ? `CONDITIONS: ${w.label}, ${t}°C, wind ${wind}km/h. ${isN ? "Night." : "Day."}`
+    ? `CONDITIONS: ${w.label}, ${t}°C, wind ${wind}mph. ${isN ? "Night." : "Day."}`
     : "CONDITIONS: assume overcast UK.";
 
   const ml = mountedId ? LENS_DB.find(l => l.id === mountedId) : null;
@@ -1331,13 +1417,14 @@ Respond ONLY with this compact JSON (no markdown, no preamble):
 Be SPECIFIC. Use real OM-1 II menu terminology. Trim the fat.`;
 }
 
-function buildDJIPrompt(mode, sel, weather, extra) {
+function buildDJIPrompt(mode, sel, weather, extra, forecastInfo) {
   const w = parseW(weather);
   const t = weather ? Math.round(weather.temperature) : null;
   const wind = weather ? Math.round(weather.windspeed) : null;
+  const gust = forecastInfo?.gustNow || wind;
   const isN = weather?.is_day === 0;
   const ws = weather
-    ? `CONDITIONS: ${w.label}, ${t}°C, wind ${wind}km/h. ${isN ? "Night." : "Day."}`
+    ? `CONDITIONS: ${w.label}, ${t}°C, wind ${wind}mph sustained, gusts to ${gust}mph. ${isN ? "Night." : "Day."}`
     : "CONDITIONS: assume UK overcast.";
 
   const m = DJI_MODES.find(x => x.id === sel.djiMode);
@@ -1785,7 +1872,7 @@ export default function App() {
     const lon = activePin?.lon ?? geoCenter.lon;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=weathercode,temperature_2m,windspeed_10m,cloudcover,precipitation_probability,is_day&forecast_days=1&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=weathercode,temperature_2m,windspeed_10m,windgusts_10m,cloudcover,precipitation_probability,is_day&forecast_days=1&timezone=auto&windspeed_unit=mph`;
     fetch(url, { signal: controller.signal })
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(d => { setWeather(d.current_weather); setForecast(d.hourly || null); setWeatherLive(true); })
@@ -1825,13 +1912,14 @@ export default function App() {
 
   async function go() {
     setLoading(true); setErr(null); setResult(null);
+    const forecastInfo = analyzeForecast(forecast, weather);
     let prompt;
     if (device === "om1") {
       const sel = { animal, beh, bird, birdSc, land, macro, portrait, night };
       prompt = buildOMPrompt(omMode, sel, weather, extra, kit, mounted, tc);
     } else {
       const sel = { djiMode, djiOutput, djiComplexity };
-      prompt = buildDJIPrompt(djiMode, sel, weather, extra);
+      prompt = buildDJIPrompt(djiMode, sel, weather, extra, forecastInfo);
     }
     try {
       const res = await fetch("/api/settings", {
@@ -1885,6 +1973,11 @@ export default function App() {
         button { transition: all 0.2s ease; }
         button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.1); }
         button:active:not(:disabled) { transform: translateY(1px); filter: brightness(0.95); }
+        /* Keep MapLibre attribution out of our sun/wind overlay zone */
+        .om-map-container .maplibregl-ctrl-bottom-right { bottom: 62px !important; right: 4px !important; }
+        .om-map-container .maplibregl-ctrl-attrib { background: rgba(20,18,16,0.6) !important; backdrop-filter: blur(8px) !important; }
+        .om-map-container .maplibregl-ctrl-attrib-button { filter: invert(0.9) !important; }
+        .om-map-container .maplibregl-ctrl-attrib a { color: ${T.textMid} !important; }
       `}</style>
 
       <AtmoBg />
@@ -2004,6 +2097,7 @@ export default function App() {
               forecast={forecast}
               weatherLive={weatherLive}
               locationLabel={activePin?.label || geoCenter.label || "Stockport"}
+              device={device}
             />
 
             {/* DEVICE CONTENT */}

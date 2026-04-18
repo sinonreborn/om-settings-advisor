@@ -1,428 +1,279 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
-/* ════════════════════════════════════════════════════════════
-   OM SYSTEM SETTINGS ADVISOR
-   A comprehensive photography settings tool for the OM-1 Mark II
-   ════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   OM SETTINGS ADVISOR v2
+   Dark glass theme · OM-1 + DJI · lens tabs with TC toggle
+   ═══════════════════════════════════════════════════════════════ */
 
-/* ─── OM SYSTEM LENS DATABASE ─── */
+/* ─── LENS DB (with TC compatibility flag) ─── */
 const LENS_DB = [
-  { id: "7-14f28", name: "M.Zuiko 7-14mm f/2.8 PRO", equiv: "14-28mm", type: "zoom", maxAp: 2.8, syncIS: false, cat: "Ultra Wide Zoom" },
-  { id: "8-25f4", name: "M.Zuiko 8-25mm f/4 PRO", equiv: "16-50mm", type: "zoom", maxAp: 4, syncIS: false, cat: "Wide Zoom" },
-  { id: "12-40f28", name: "M.Zuiko 12-40mm f/2.8 PRO II", equiv: "24-80mm", type: "zoom", maxAp: 2.8, syncIS: true, cat: "Standard Zoom" },
-  { id: "12-100f4", name: "M.Zuiko 12-100mm f/4 IS PRO", equiv: "24-200mm", type: "zoom", maxAp: 4, syncIS: true, cat: "All-in-one Zoom" },
-  { id: "40-150f28", name: "M.Zuiko 40-150mm f/2.8 PRO", equiv: "80-300mm", type: "zoom", maxAp: 2.8, syncIS: false, cat: "Telephoto Zoom" },
-  { id: "40-150f4", name: "M.Zuiko 40-150mm f/4 PRO", equiv: "80-300mm", type: "zoom", maxAp: 4, syncIS: false, cat: "Compact Tele" },
-  { id: "100-400f5-63", name: "M.Zuiko 100-400mm f/5-6.3 IS", equiv: "200-800mm", type: "zoom", maxAp: 5, syncIS: true, cat: "Super Telephoto" },
-  { id: "150-400f45", name: "M.Zuiko 150-400mm f/4.5 TC IS PRO", equiv: "300-1000mm", type: "zoom", maxAp: 4.5, syncIS: true, cat: "Super Tele PRO" },
-  { id: "17f12", name: "M.Zuiko 17mm f/1.2 PRO", equiv: "34mm", type: "prime", maxAp: 1.2, syncIS: false, cat: "Wide Prime" },
-  { id: "17f18", name: "M.Zuiko 17mm f/1.8", equiv: "34mm", type: "prime", maxAp: 1.8, syncIS: false, cat: "Wide Prime" },
-  { id: "20f14", name: "M.Zuiko 20mm f/1.4 PRO", equiv: "40mm", type: "prime", maxAp: 1.4, syncIS: false, cat: "Wide Prime" },
-  { id: "25f12", name: "M.Zuiko 25mm f/1.2 PRO", equiv: "50mm", type: "prime", maxAp: 1.2, syncIS: false, cat: "Standard Prime" },
-  { id: "25f18", name: "M.Zuiko 25mm f/1.8", equiv: "50mm", type: "prime", maxAp: 1.8, syncIS: false, cat: "Standard Prime" },
-  { id: "45f12", name: "M.Zuiko 45mm f/1.2 PRO", equiv: "90mm", type: "prime", maxAp: 1.2, syncIS: false, cat: "Portrait Prime" },
-  { id: "45f18", name: "M.Zuiko 45mm f/1.8", equiv: "90mm", type: "prime", maxAp: 1.8, syncIS: false, cat: "Portrait Prime" },
-  { id: "75f18", name: "M.Zuiko 75mm f/1.8", equiv: "150mm", type: "prime", maxAp: 1.8, syncIS: false, cat: "Tele Prime" },
-  { id: "300f4", name: "M.Zuiko 300mm f/4 IS PRO", equiv: "600mm", type: "prime", maxAp: 4, syncIS: true, cat: "Super Tele Prime" },
-  { id: "30f35m", name: "M.Zuiko 30mm f/3.5 Macro", equiv: "60mm", type: "prime", maxAp: 3.5, syncIS: false, cat: "Macro" },
-  { id: "60f28m", name: "M.Zuiko 60mm f/2.8 Macro", equiv: "120mm", type: "prime", maxAp: 2.8, syncIS: false, cat: "Macro" },
-  { id: "90f35m", name: "M.Zuiko 90mm f/3.5 Macro IS PRO", equiv: "180mm", type: "prime", maxAp: 3.5, syncIS: true, cat: "Macro PRO" },
-  { id: "mc14", name: "MC-14 1.4x Teleconverter", equiv: "1.4x", type: "tc", maxAp: 0, syncIS: false, cat: "Teleconverter" },
-  { id: "mc20", name: "MC-20 2x Teleconverter", equiv: "2x", type: "tc", maxAp: 0, syncIS: false, cat: "Teleconverter" },
+  { id: "7-14f28",    name: "7-14mm f/2.8 PRO",        short: "7-14 PRO",    equiv: "14-28mm",    type: "zoom",  maxAp: 2.8, syncIS: false, tc: false, cat: "Ultra Wide Zoom" },
+  { id: "8-25f4",     name: "8-25mm f/4 PRO",          short: "8-25 PRO",    equiv: "16-50mm",    type: "zoom",  maxAp: 4,   syncIS: false, tc: false, cat: "Wide Zoom" },
+  { id: "12-40f28",   name: "12-40mm f/2.8 PRO II",    short: "12-40 PRO",   equiv: "24-80mm",    type: "zoom",  maxAp: 2.8, syncIS: true,  tc: false, cat: "Standard Zoom" },
+  { id: "12-100f4",   name: "12-100mm f/4 IS PRO",     short: "12-100 PRO",  equiv: "24-200mm",   type: "zoom",  maxAp: 4,   syncIS: true,  tc: false, cat: "All-in-one" },
+  { id: "40-150f28",  name: "40-150mm f/2.8 PRO",      short: "40-150 f/2.8",equiv: "80-300mm",   type: "zoom",  maxAp: 2.8, syncIS: false, tc: true,  cat: "Tele Zoom" },
+  { id: "40-150f4",   name: "40-150mm f/4 PRO",        short: "40-150 f/4",  equiv: "80-300mm",   type: "zoom",  maxAp: 4,   syncIS: false, tc: true,  cat: "Compact Tele" },
+  { id: "100-400f5-63", name: "100-400mm f/5-6.3 IS",  short: "100-400",     equiv: "200-800mm",  type: "zoom",  maxAp: 5,   syncIS: true,  tc: true,  cat: "Super Tele" },
+  { id: "150-400f45", name: "150-400mm f/4.5 TC IS PRO",short: "150-400 PRO",equiv: "300-1000mm", type: "zoom",  maxAp: 4.5, syncIS: true,  tc: true,  cat: "Super Tele PRO" },
+  { id: "17f12",      name: "17mm f/1.2 PRO",          short: "17mm f/1.2",  equiv: "34mm",       type: "prime", maxAp: 1.2, syncIS: false, tc: false, cat: "Wide Prime" },
+  { id: "17f18",      name: "17mm f/1.8",              short: "17mm f/1.8",  equiv: "34mm",       type: "prime", maxAp: 1.8, syncIS: false, tc: false, cat: "Wide Prime" },
+  { id: "20f14",      name: "20mm f/1.4 PRO",          short: "20mm f/1.4",  equiv: "40mm",       type: "prime", maxAp: 1.4, syncIS: false, tc: false, cat: "Wide Prime" },
+  { id: "25f12",      name: "25mm f/1.2 PRO",          short: "25mm f/1.2",  equiv: "50mm",       type: "prime", maxAp: 1.2, syncIS: false, tc: false, cat: "Standard Prime" },
+  { id: "25f18",      name: "25mm f/1.8",              short: "25mm f/1.8",  equiv: "50mm",       type: "prime", maxAp: 1.8, syncIS: false, tc: false, cat: "Standard Prime" },
+  { id: "45f12",      name: "45mm f/1.2 PRO",          short: "45mm f/1.2",  equiv: "90mm",       type: "prime", maxAp: 1.2, syncIS: false, tc: false, cat: "Portrait Prime" },
+  { id: "45f18",      name: "45mm f/1.8",              short: "45mm f/1.8",  equiv: "90mm",       type: "prime", maxAp: 1.8, syncIS: false, tc: false, cat: "Portrait Prime" },
+  { id: "75f18",      name: "75mm f/1.8",              short: "75mm f/1.8",  equiv: "150mm",      type: "prime", maxAp: 1.8, syncIS: false, tc: false, cat: "Tele Prime" },
+  { id: "300f4",      name: "300mm f/4 IS PRO",        short: "300 PRO",     equiv: "600mm",      type: "prime", maxAp: 4,   syncIS: true,  tc: true,  cat: "Super Tele Prime" },
+  { id: "30f35m",     name: "30mm f/3.5 Macro",        short: "30mm Macro",  equiv: "60mm",       type: "prime", maxAp: 3.5, syncIS: false, tc: false, cat: "Macro" },
+  { id: "60f28m",     name: "60mm f/2.8 Macro",        short: "60mm Macro",  equiv: "120mm",      type: "prime", maxAp: 2.8, syncIS: false, tc: false, cat: "Macro" },
+  { id: "90f35m",     name: "90mm f/3.5 Macro IS PRO", short: "90 Macro",    equiv: "180mm",      type: "prime", maxAp: 3.5, syncIS: true,  tc: true,  cat: "Macro PRO" },
 ];
 
-const STORAGE_KEY = "om-advisor-kit";
-const DEFAULT_KIT = ["12-100f4", "100-400f5-63", "45f18", "17f18"];
+const STORAGE_KEY = "om-advisor-kit-v2";
+const DEFAULT_KIT = ["12-100f4", "100-400f5-63", "45f12", "17f12"];
 
-function usePersistedKit() {
-  const [kit, setKitState] = useState(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      return s && s.length ? s : DEFAULT_KIT;
-    } catch { return DEFAULT_KIT; }
-  });
-  const [loaded] = useState(true);
+/* ─── TC OPTIONS ─── */
+const TC_OPTIONS = [
+  { id: "none", label: "No TC",   stop: 0, mult: 1,   short: "" },
+  { id: "mc14", label: "MC-14",   stop: 1, mult: 1.4, short: " +MC-14" },
+  { id: "mc20", label: "MC-20",   stop: 2, mult: 2,   short: " +MC-20" },
+];
 
-  const setKit = useCallback((ids) => {
-    setKitState(ids);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ids)); } catch {}
-  }, []);
-
-  return [kit, setKit, loaded];
-}
+/* ─── OM-1 SCENARIOS ─── */
+const OM_MODES = [
+  { id: "animals",    icon: "🐾",  label: "Animals",    sub: "Cats, dogs, foxes" },
+  { id: "birds",      icon: "🦅",  label: "Birds",      sub: "Perched to in-flight" },
+  { id: "landscape",  icon: "🏔️", label: "Landscape",  sub: "Weather-led" },
+  { id: "macro",      icon: "🌿",  label: "Macro",      sub: "Close-up, textures" },
+  { id: "portrait",   icon: "👤",  label: "Portrait",   sub: "People, rescue cats" },
+  { id: "night",      icon: "🌌",  label: "Night",      sub: "Stars, low light" },
+];
 
 const ANIMALS = [
-  { id: "cat", label: "Cat Snaps", icon: "🐱", tag: "Indoor loungers to outdoor prowlers" },
-  { id: "dog", label: "Dog Shots", icon: "🐕", tag: "Park walks to full-speed zoomies" },
-  { id: "squirrel", label: "Squirrel Grabs", icon: "🐿️", tag: "Twitchy, unpredictable, gone" },
-  { id: "fox", label: "Fox Watch", icon: "🦊", tag: "Dawn visitors and garden lurkers" },
-  { id: "deer", label: "Deer Stalker", icon: "🦌", tag: "Distant, cautious, easily spooked" },
-  { id: "rabbit", label: "Rabbit Run", icon: "🐇", tag: "Here one second, bolted the next" },
-  { id: "hedgehog", label: "Hog Patrol", icon: "🦔", tag: "Nighttime garden shufflers" },
-  { id: "other", label: "Wild Card", icon: "🐾", tag: "Something else entirely" },
+  { id: "cat",      label: "Cat",       icon: "🐱", tag: "Indoor or out" },
+  { id: "dog",      label: "Dog",       icon: "🐕", tag: "Park walks to zoomies" },
+  { id: "squirrel", label: "Squirrel",  icon: "🐿️", tag: "Twitchy, fast" },
+  { id: "fox",      label: "Fox",       icon: "🦊", tag: "Dawn, garden" },
+  { id: "deer",     label: "Deer",      icon: "🦌", tag: "Distant, cautious" },
+  { id: "rabbit",   label: "Rabbit",    icon: "🐇", tag: "Quick to bolt" },
+  { id: "hedgehog", label: "Hedgehog",  icon: "🦔", tag: "Night shuffler" },
+  { id: "other",    label: "Other",     icon: "🐾", tag: "Something else" },
 ];
+
 const ANIMAL_BEH = [
-  { id: "chill", label: "Just chilling", desc: "Sleeping, sitting, grooming — not going anywhere" },
-  { id: "potter", label: "Pottering about", desc: "Slow wander, sniffing around, exploring" },
-  { id: "move", label: "On the move", desc: "Trotting, walking with purpose, alert" },
-  { id: "send", label: "Full send", desc: "Running, chasing, zoomies, absolute chaos" },
+  { id: "chill",  label: "Chilling",     desc: "Still, relaxed, grooming" },
+  { id: "potter", label: "Pottering",    desc: "Slow wander, exploring" },
+  { id: "move",   label: "On the move",  desc: "Walking, trotting" },
+  { id: "send",   label: "Full send",    desc: "Running, chasing" },
 ];
+
 const BIRDS = [
-  { id: "garden", label: "Small Garden Bird", icon: "🐦", tag: "Robins, blue tits, wrens" },
-  { id: "raptor", label: "Raptor", icon: "🦅", tag: "Hawks, kestrels, buzzards" },
-  { id: "owl", label: "Owl", icon: "🦉", tag: "Low light specialists" },
-  { id: "waterfowl", label: "Waterfowl", icon: "🦆", tag: "Ducks, geese, swans" },
-  { id: "wader", label: "Wader / Shore", icon: "🦩", tag: "Herons, curlews, oystercatchers" },
-  { id: "seabird", label: "Seabird", icon: "🕊️", tag: "Gulls, terns, gannets" },
-  { id: "corvid", label: "Corvid", icon: "🐦‍⬛", tag: "Crows, magpies, jays" },
-  { id: "other", label: "Other", icon: "🪶", tag: "Something else with wings" },
+  { id: "garden",    label: "Garden Bird",  icon: "🐦",    tag: "Robin, tit, wren" },
+  { id: "raptor",    label: "Raptor",       icon: "🦅",    tag: "Hawk, kestrel, buzzard" },
+  { id: "owl",       label: "Owl",          icon: "🦉",    tag: "Low light" },
+  { id: "waterfowl", label: "Waterfowl",    icon: "🦆",    tag: "Duck, goose, swan" },
+  { id: "wader",     label: "Wader",        icon: "🦩",    tag: "Heron, curlew" },
+  { id: "seabird",   label: "Seabird",      icon: "🕊️",   tag: "Gull, tern" },
+  { id: "corvid",    label: "Corvid",       icon: "🐦‍⬛", tag: "Crow, magpie, jay" },
+  { id: "other",     label: "Other",        icon: "🪶",    tag: "Something else" },
 ];
+
 const BIRD_SC = [
-  { id: "still", label: "Sat there, not doing much", desc: "Perched, preening, looking about", d: "EASY" },
-  { id: "ready", label: "Looks like it might go", desc: "Alert, head up, tensed — could bolt", d: "READY" },
-  { id: "feed", label: "Feeding", desc: "Head down eating, pauses between pecks", d: "EASY" },
-  { id: "swim", label: "Swimming, just vibing", desc: "Floating, paddling gently", d: "EASY" },
-  { id: "swim_r", label: "On water, getting restless", desc: "Flapping wings, running on water", d: "READY" },
-  { id: "soar", label: "Soaring or gliding", desc: "Big slow circles, riding thermals", d: "TRACK" },
-  { id: "fast", label: "In flight, moving fast", desc: "Flapping hard, diving, changing direction", d: "HARD" },
-  { id: "nope", label: "It'll probably just sit there", desc: "Been watching ages. Get a portrait.", d: "CHILL" },
+  { id: "still",  label: "Perched",         desc: "Still, looking around",      d: "EASY" },
+  { id: "ready",  label: "Alert",           desc: "Might go any second",        d: "READY" },
+  { id: "feed",   label: "Feeding",         desc: "Head down, pausing",         d: "EASY" },
+  { id: "swim",   label: "On water",        desc: "Floating calmly",            d: "EASY" },
+  { id: "swim_r", label: "Water, restless", desc: "Wings flapping",             d: "READY" },
+  { id: "soar",   label: "Soaring",         desc: "Slow circles, thermals",     d: "TRACK" },
+  { id: "fast",   label: "In flight",       desc: "Fast flapping, diving",      d: "HARD" },
 ];
+
 const LANDS = [
-  { id: "vista", label: "Wide Vista", icon: "🏔️", desc: "Hills, valleys, peaks, big open skies" },
-  { id: "wood", label: "Woodland", icon: "🌲", desc: "Trees, forest paths, dappled light" },
-  { id: "water", label: "Water Feature", icon: "💧", desc: "Streams, lakes, waterfalls, coast" },
-  { id: "urban", label: "Urban / Architecture", icon: "🏙️", desc: "Buildings, streets, structures" },
-  { id: "close", label: "Close-up Nature", icon: "🌿", desc: "Flowers, textures, frost, moss, fungi" },
-  { id: "night", label: "Night Sky", icon: "🌌", desc: "Stars, Milky Way, moon, aurora" },
-  { id: "golden", label: "Golden Hour / Sunset", icon: "🌅", desc: "Dramatic light, long shadows" },
-  { id: "long", label: "Long Exposure", icon: "🌊", desc: "Silky water, cloud trails" },
+  { id: "vista",   label: "Wide Vista",      icon: "🏔️", desc: "Hills, valleys, sky" },
+  { id: "wood",    label: "Woodland",        icon: "🌲", desc: "Trees, dappled light" },
+  { id: "water",   label: "Water Feature",   icon: "💧", desc: "Streams, lakes, coast" },
+  { id: "urban",   label: "Urban",           icon: "🏙️", desc: "Buildings, structures" },
+  { id: "golden",  label: "Golden Hour",     icon: "🌅", desc: "Dramatic light" },
+  { id: "long",    label: "Long Exposure",   icon: "🌊", desc: "Silky water, trails" },
 ];
 
-function WeatherScene({ weather }) {
-  if (!weather) return null;
-  const c = weather.weathercode;
-  const isN = weather.is_day === 0;
-  const wind = weather.windspeed || 0;
-  const temp = Math.round(weather.temperature);
-  const isSnow = c >= 71 && c <= 77;
-  const isRain = c >= 51 && c <= 67;
-  const isClear = c <= 1;
-  const isPartly = c >= 2 && c <= 3;
-  const isOvercast = c >= 4 && c <= 48;
-  const isStorm = c >= 80;
-  const isWindy = wind > 30;
-  const isCold = temp <= 3;
+const MACRO_SC = [
+  { id: "flowers",  label: "Flowers",        desc: "Outdoor, light breeze OK" },
+  { id: "insects",  label: "Insects",        desc: "Fast, unpredictable" },
+  { id: "textures", label: "Textures",       desc: "Frost, moss, fungi, bark" },
+  { id: "product",  label: "Product/Still",  desc: "Indoor, controlled" },
+];
 
-  // Sky gradient
-  let skyTop, skyBot;
-  if (isN) { skyTop = "#0a0e1a"; skyBot = "#151a2e"; }
-  else if (isClear) { skyTop = "#4a8ec2"; skyBot = "#8ec5e8"; }
-  else if (isPartly) { skyTop = "#5a8aaa"; skyBot = "#9ab8cc"; }
-  else if (isSnow) { skyTop = "#7a8090"; skyBot = "#b0b8c4"; }
-  else if (isRain || isStorm) { skyTop = "#3a4050"; skyBot = "#5a6270"; }
-  else { skyTop = "#6a7280"; skyBot = "#9aa0a8"; }
+const PORTRAIT_SC = [
+  { id: "shelter_cat",  label: "Shelter Cat",   desc: "Silk Cat Rescue sessions" },
+  { id: "people",       label: "Person",        desc: "Outdoor or indoor" },
+  { id: "kittens",      label: "Kittens",       desc: "Oska, Nyx — low light indoor" },
+  { id: "env_portrait", label: "Environmental", desc: "Subject in context" },
+];
 
-  // Ground
-  let gnd = isSnow || isCold ? "#d8dce4" : "#3a4a30";
-  let gnd2 = isSnow || isCold ? "#c0c8d0" : "#2a3820";
+const NIGHT_SC = [
+  { id: "stars",     label: "Stars / Milky Way", desc: "Starry Sky AF territory" },
+  { id: "lowlight",  label: "Low Light Indoor",  desc: "Cats, home, handheld" },
+  { id: "composite", label: "Live Composite",    desc: "Trails, light painting" },
+  { id: "urban_n",   label: "Urban Night",       desc: "Streetlights, reflections" },
+];
 
-  const particles = [];
-  if (isRain) {
-    for (let i = 0; i < 12; i++) {
-      const x = 20 + Math.random() * 260;
-      const y = 10 + Math.random() * 50;
-      const d = 0.3 + Math.random() * 0.5;
-      particles.push(<line key={`r${i}`} x1={x} y1={y} x2={x - 3} y2={y + 8} stroke="rgba(160,190,220,0.5)" strokeWidth="1" strokeLinecap="round">
-        <animate attributeName="y1" values={`${y};${y + 70};${y}`} dur={`${d + 0.8}s`} repeatCount="indefinite" />
-        <animate attributeName="y2" values={`${y + 8};${y + 78};${y + 8}`} dur={`${d + 0.8}s`} repeatCount="indefinite" />
-      </line>);
-    }
-  }
-  if (isSnow) {
-    for (let i = 0; i < 15; i++) {
-      const x = 15 + Math.random() * 270;
-      const y = 5 + Math.random() * 55;
-      const d = 1.5 + Math.random() * 2;
-      const r = 1 + Math.random() * 1.5;
-      particles.push(<circle key={`s${i}`} cx={x} cy={y} r={r} fill="rgba(220,230,240,0.7)">
-        <animate attributeName="cy" values={`${y};${y + 65};${y}`} dur={`${d}s`} repeatCount="indefinite" />
-        <animate attributeName="cx" values={`${x};${x + 8};${x - 4};${x}`} dur={`${d * 1.3}s`} repeatCount="indefinite" />
-      </circle>);
-    }
-  }
+/* ─── DJI SCENARIOS ─── */
+const DJI_MODES = [
+  { id: "aerial_land",   icon: "🏞️", label: "Aerial Landscape", sub: "Scenery from above" },
+  { id: "architecture",  icon: "🏛️", label: "Architecture",     sub: "Buildings, patterns" },
+  { id: "above_subj",    icon: "🔍",  label: "Subject From Above",sub: "People, wildlife, cars" },
+  { id: "orbit",         icon: "🌀",  label: "Orbit / Circle",   sub: "Point of interest spin" },
+  { id: "reveal",        icon: "✨",  label: "Reveal Shot",       sub: "Dramatic pull-back" },
+  { id: "hyperlapse",    icon: "⏱️", label: "Hyperlapse",        sub: "Time-compressed motion" },
+];
 
-  // Wind streaks
-  const windLines = [];
-  if (isWindy) {
-    for (let i = 0; i < 5; i++) {
-      const y = 20 + i * 12;
-      const x = 40 + Math.random() * 100;
-      windLines.push(<line key={`w${i}`} x1={x} y1={y} x2={x + 30 + Math.random() * 25} y2={y - 1} stroke="rgba(200,210,220,0.25)" strokeWidth="1" strokeLinecap="round">
-        <animate attributeName="x1" values={`${x};${x + 120};${x}`} dur={`${1.2 + Math.random() * 0.6}s`} repeatCount="indefinite" />
-        <animate attributeName="x2" values={`${x + 40};${x + 160};${x + 40}`} dur={`${1.2 + Math.random() * 0.6}s`} repeatCount="indefinite" />
-      </line>);
-    }
-  }
+const DJI_OUTPUT = [
+  { id: "photo_single",  label: "Single Photo",   icon: "📷" },
+  { id: "photo_aeb",     label: "AEB Bracket",    icon: "📸" },
+  { id: "photo_pano",    label: "Panorama",       icon: "🌅" },
+  { id: "video_cine",    label: "Cinematic Video",icon: "🎬" },
+  { id: "video_smooth",  label: "Smooth Video",   icon: "🎥" },
+  { id: "video_slow",    label: "Slow Motion",    icon: "🐢" },
+];
 
-  return (
-    <div style={{ marginTop: 12, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.bdr}`, position: "relative" }}>
-      <svg viewBox="0 0 300 80" style={{ display: "block", width: "100%" }} xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={skyTop} /><stop offset="100%" stopColor={skyBot} /></linearGradient>
-          <linearGradient id="gnd" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={gnd} /><stop offset="100%" stopColor={gnd2} /></linearGradient>
-        </defs>
-        {/* Sky */}
-        <rect width="300" height="80" fill="url(#sky)" />
-        {/* Ground */}
-        <ellipse cx="150" cy="82" rx="180" ry="20" fill="url(#gnd)" />
+const DJI_COMPLEXITY = [
+  { id: "easy",   label: "Keep it easy",    desc: "Auto-assisted, fewer decisions" },
+  { id: "try",    label: "Try something",   desc: "Semi-manual, new territory" },
+];
 
-        {/* Sun or Moon */}
-        {!isOvercast && !isRain && !isStorm && !isSnow && (
-          isN
-            ? <><circle cx="240" cy="18" r="8" fill="#e8e4d0" opacity="0.9" /><circle cx="237" cy="16" r="7" fill={skyTop} /></>
-            : <circle cx="240" cy="20" r="12" fill="#f0d870" opacity="0.85"><animate attributeName="opacity" values="0.85;0.95;0.85" dur="4s" repeatCount="indefinite" /></circle>
-        )}
+/* ─── KNOWLEDGE BASE ─── */
+const KB_OM = `OM SYSTEM OM-1 Mark II reference:
+- 20.4MP Stacked BSI, ISO 200-25600 native (usable to ~32000 with Lightroom AI Denoise)
+- 5-axis IBIS (7 stops body, 8.5 Sync IS on compatible lenses)
+- Stacked sensor: electronic shutter to 1/32000s, no flash sync on electronic
+- Mechanical shutter flash sync: 1/250s max
 
-        {/* Clouds */}
-        {(isPartly || isOvercast || isRain || isStorm) && <>
-          <g opacity={isOvercast || isRain ? "0.7" : "0.5"}>
-            <ellipse cx="70" cy="22" rx="32" ry="10" fill={isRain ? "#4a5060" : "#8a9098"} />
-            <ellipse cx="58" cy="20" rx="18" ry="9" fill={isRain ? "#505868" : "#9aa0a8"} />
-            <ellipse cx="85" cy="20" rx="20" ry="9" fill={isRain ? "#485060" : "#8a9098"} />
-          </g>
-          <g opacity={isOvercast || isRain ? "0.6" : "0.4"} transform={`translate(${isWindy ? 0 : 0}, 0)`}>
-            <ellipse cx="190" cy="16" rx="28" ry="9" fill={isRain ? "#485060" : "#8a9098"} />
-            <ellipse cx="175" cy="14" rx="16" ry="8" fill={isRain ? "#505868" : "#9aa0a8"} />
-            <ellipse cx="205" cy="15" rx="18" ry="8" fill={isRain ? "#4a5060" : "#8a9098"} />
-          </g>
-        </>}
+DRIVE MODES: SH2 12.5-50fps C-AF+AE maintained (best action). SH1 120fps AF first-frame only. Pro Capture H (SH2-based, continuous AF). Pro Capture L (SH1-based, first-frame AF only). Pro Capture ideal for one-handed shelter shooting.
 
-        {/* Fog layer for overcast */}
-        {isOvercast && !isRain && !isSnow && <rect x="0" y="45" width="300" height="20" fill="rgba(140,150,160,0.12)" />}
+AF: Subject Detection supports Bird, Cats & Dogs, Human, Cars/Trains/Planes. C-AF+Tracking automatically disabled when Subject Detection ON (Mark II behaviour). Toggle Subject Detection via assigned button for quick fallback.
 
-        {/* Stars at night */}
-        {isN && isClear && <>
-          {[{x:40,y:12},{x:90,y:8},{x:130,y:18},{x:180,y:6},{x:210,y:14},{x:260,y:10},{x:55,y:28},{x:160,y:30}].map((s,i) =>
-            <circle key={`st${i}`} cx={s.x} cy={s.y} r={0.8 + Math.random()} fill="#e8e4d0" opacity={0.4 + Math.random() * 0.4}>
-              <animate attributeName="opacity" values={`${0.3 + Math.random() * 0.3};${0.7 + Math.random() * 0.3};${0.3 + Math.random() * 0.3}`} dur={`${2 + Math.random() * 2}s`} repeatCount="indefinite" />
-            </circle>
-          )}
-        </>}
+SYNC IS LENSES (8.5 stops): 12-40 f/2.8 PRO II, 12-100 f/4 IS PRO, 100-400 IS, 150-400 IS PRO, 90mm f/3.5 Macro IS PRO.
 
-        {/* Water hint on ground */}
-        <ellipse cx="120" cy="72" rx="35" ry="4" fill="rgba(100,140,170,0.15)" />
-        <ellipse cx="180" cy="74" rx="20" ry="3" fill="rgba(100,140,170,0.1)" />
+TELECONVERTERS: MC-14 (1 stop penalty), MC-20 (2 stop penalty). Compatible only with 40-150 f/2.8 PRO, 40-150 f/4 PRO, 100-400 IS, 150-400 IS PRO, 300mm f/4 IS PRO, 90mm Macro IS PRO. Strictly sunny-day use for the 100-400 + MC-20 (f/10-12.6 at long end).
 
-        {/* Distant treeline */}
-        {!isSnow && <path d="M0,62 Q15,52 30,62 Q42,54 55,62 Q65,55 78,62 Q88,53 100,62 Q112,54 125,62 Q135,56 148,62 Q160,52 172,62 Q182,55 195,62 Q208,53 220,62 Q230,56 245,62 Q255,52 268,62 Q278,56 290,62 L300,62 L300,68 L0,68 Z" fill="rgba(30,50,25,0.4)" />}
-        {isSnow && <path d="M0,62 Q15,54 30,62 Q42,56 55,62 Q65,57 78,62 Q88,55 100,62 Q112,56 125,62 Q135,58 148,62 Q160,54 172,62 Q182,57 195,62 Q208,55 220,62 Q230,58 245,62 Q255,54 268,62 Q278,58 290,62 L300,62 L300,68 L0,68 Z" fill="rgba(180,190,200,0.35)" />}
+HIGH ISO: James has confirmed OM-1 II handles ISO 32000-40000 cleanly when processed through Lightroom AI Denoise on M4 Max Mac. Do not conservatively cap ISO at 6400.
 
-        {particles}
-        {windLines}
-      </svg>
+APERTURE PRAGMATICS (for James): f/1.2 DoF too shallow for reliable hits on moving subjects. f/2 is the default for action at f/1.2 primes; f/1.2 reserved for static deliberate shots.`;
 
-      {/* Condition badges */}
-      <div style={{ position: "absolute", bottom: 6, right: 8, display: "flex", gap: 4 }}>
-        {isWindy && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.5)", color: "#a0b8cc", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>💨 {Math.round(wind)}km/h</span>}
-        {isCold && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.5)", color: "#a0c0e0", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>🥶 {temp}°C</span>}
-        {isWindy && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.5)", color: "#c0a070", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>🚁 tricky</span>}
-      </div>
-    </div>
-  );
-}
+const KB_DJI = `DJI Mini 4 Pro reference:
+- 1/1.3" sensor, 24mm equiv f/1.7 fixed aperture
+- Shutter 1/16000s electronic to 2s
+- 4K/100fps, 1080p/200fps slow-mo
+- Takeoff weight under 249g (no registration most jurisdictions)
+- Wind resistance: level 5 (up to 10.7 m/s ≈ 38 km/h)
+- Do not fly above 20 km/h sustained wind (risky), grounded above 30 km/h
 
-function parseW(w) {
-  if (!w) return { label: "Unknown", icon: "☁️" };
-  const c = w.weathercode;
-  if (c <= 1) return { label: "Clear", icon: "☀️" };
-  if (c <= 3) return { label: "Partly Cloudy", icon: "⛅" };
-  if (c <= 48) return { label: "Overcast", icon: "☁️" };
-  if (c <= 67) return { label: "Rainy", icon: "🌧️" };
-  if (c <= 77) return { label: "Snow", icon: "❄️" };
-  return { label: "Stormy", icon: "⛈️" };
-}
+PHOTO: Auto (default), Pro (manual controls). AEB bracket for HDR scenes. Panorama modes: Sphere, 180°, Wide-angle, Vertical.
 
-/* ─── KNOWLEDGE + PROMPT ─── */
-const KB = `You are an expert photography advisor for the OM SYSTEM OM-1 Mark II with deep knowledge from Phil Norton's guide.
+VIDEO: D-Log M colour for grading flexibility (needs post work). Normal for direct output. 180° shutter rule: shutter = 1/(framerate × 2). ND filters recommended bright conditions (ND8/16/32/64).
 
-CAMERA: 20.4MP Stacked BSI, ISO 200-25600 (usable ~6400), 1053 cross-type AF points, 5-axis IBIS (7 stops body, 8.5 Sync IS), electronic shutter to 1/32000s.
+SIMPLICITY: For someone learning, Auto photo + Normal colour + no ND is totally valid. Pro mode and D-Log M worth trying on controlled sunny days.`;
 
-FN LEVER (Mode 2): Two positions each store INDEPENDENT AF Mode + AF Target per Custom Mode. ALWAYS specify both.
+/* ─── STYLES / TOKENS ─── */
+const FONTS = "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap";
 
-DRIVE MODES: Sequential L ~10fps mechanical. Silent Seq ~10fps electronic. SH2 12.5-50fps C-AF+metering maintained, min 1/160s blackout-free (best action mode). SH1 12.5-120fps AF+metering FIRST FRAME ONLY above 20fps. Pro Capture H (SH2-based) pre-frames with continuous AF up to 99. Pro Capture L (SH1-based) first-frame AF only.
-
-AF BUTTON PRIORITY: When Subject Detection ON, shutter half-press and AF-ON can have different priorities. Option 1 "Subject Detect Priority" tracks detected subject. Option 2 "AF Target Priority" uses C-AF+Tracking. Assign to different buttons for instant fallback.
-
-SUBJECT DETECTION: Bird, Dogs & Cats, Human, Cars/Trains/Planes. C-AF+Tracking DISABLED when Subject Detection ON (Mark II change). Dogs & Cats is hit-and-miss for non-domestic animals.
-
-C-AF AREA: "All" = detection tracks across entire frame. "Target" = only within selected target.
-
-DIAL SWAP (wildlife): Cog>1.Ops>Dial Settings>M/B: Front→ISO, Rear→Shutter. Aperture via Exp Comp+arrows.
-
-BUTTONS (per CM): Exp Comp, Record, ISO, AF-ON, AEL, Arrow R/D, Front Bottom/Top, Lens Fn.
-
-COMPUTATIONAL (cannot combine): Live ND (to ND128/7 stops, S or M only), Live GND, Hi Res, Focus BKT/Stack, Live Composite, Live Time, Starry Sky AF.
-
-SYNC IS LENSES (8.5 stops): 12-40 f/2.8 PRO II, 12-100 f/4 IS PRO, 100-400 f/5-6.3 IS, 150-400 f/4.5 IS PRO, 90mm f/3.5 Macro IS PRO.
-
-IS MODES: S-IS Auto (general), S-IS 1 (vertical pan), S-IS 2 (horizontal pan).
-Low ISO Processing: Detail (landscapes) or Drive Speed (wildlife/action).`;
-
-function buildPrompt(mode, sel, weather, extra, availLenses, mountedId) {
-  const w = parseW(weather);
-  const isN = weather?.is_day === 0;
-  const t = weather ? Math.round(weather.temperature) : null;
-  const ws = weather ? `WEATHER: ${w.label}, ${t}°C, wind ${weather.windspeed}km/h. ${isN ? "Night." : "Day."}` : "Assume overcast UK.";
-
-  const ml = mountedId ? LENS_DB.find(l => l.id === mountedId) : null;
-  const bag = availLenses.filter(id => id !== mountedId).map(id => LENS_DB.find(l => l.id === id)).filter(Boolean);
-  let ls = "";
-  if (ml) {
-    ls = `MOUNTED LENS: ${ml.name} (${ml.equiv}, f/${ml.maxAp}${ml.syncIS ? ", Sync IS" : ""}). Optimise for THIS lens.`;
-    if (bag.length) ls += `\nALSO IN BAG: ${bag.map(l => `${l.name} (${l.equiv}, f/${l.maxAp}${l.syncIS?", Sync IS":""})`).join("; ")}. If notably better option exists, mention in would_swap.`;
-  } else {
-    const all = availLenses.map(id => LENS_DB.find(l => l.id === id)).filter(Boolean);
-    ls = `AVAILABLE LENSES: ${all.map(l => `${l.name} (${l.equiv}, f/${l.maxAp}${l.syncIS?", Sync IS":""})`).join("; ")}. Recommend the best one.`;
-  }
-
-  let sc = "";
-  if (mode === "animals") {
-    const a = ANIMALS.find(x => x.id === sel.animal), b = ANIMAL_BEH.find(x => x.id === sel.beh);
-    sc = `ANIMAL: ${a?.label}. Behaviour: "${b?.label}" — ${b?.desc}. Use Dogs & Cats detection (fallback: C-AF+Tracking).`;
-  } else if (mode === "birds") {
-    const bt = BIRDS.find(x => x.id === sel.bird), bs = BIRD_SC.find(x => x.id === sel.birdSc);
-    sc = `BIRD: ${bt?.label}. Scenario: "${bs?.label}" — ${bs?.desc} [${bs?.d}]. Use Bird detection. C-AF+Tracking disabled when active — use AF Button Priority fallback.`;
-  } else if (mode === "landscape") {
-    const lt = LANDS.find(x => x.id === sel.land);
-    sc = `LANDSCAPE: ${lt?.label} — ${lt?.desc}. ${ws} Factor weather into lens/settings.`;
-  }
-
-  return `${KB}\n\n${ws}\n${sc}\n${ls}\n${extra ? `NOTES: ${extra}` : ""}
-
-Respond ONLY with valid JSON (no markdown):
-{"preset_name":"Branded name","shooting_mode":"A/S/M + reason","recommended_lens":"lens name","lens_reason":"why","would_swap":"better lens or null","swap_reason":"why or null","aperture":"f/X","shutter_speed":"1/Xs","iso":"value","metering":"mode","drive_mode":"mode+fps","drive_reason":"why","lever1_af_mode":"mode","lever1_af_target":"target","lever1_use":"when","lever2_af_mode":"mode","lever2_af_target":"target","lever2_use":"when","subject_detection":"mode","af_button_shutter":"function","af_button_afon":"function","c_af_area":"All/Target","c_af_sensitivity":"value+reason","btn_exp_comp":"fn","btn_iso":"fn","btn_af_on":"fn","btn_ael":"fn","btn_arrow_right":"fn","btn_arrow_down":"fn","btn_front_bottom":"fn","btn_front_top":"fn","btn_lens_fn":"fn","dial_config":"description","is_mode":"mode+reason","special_feature":"feature or null","special_feature_detail":"detail or null","low_iso_processing":"Detail/Drive Speed","tips":["tip1","tip2","tip3","tip4"],"why":"3-4 sentences","setup_steps":["step1","step2","step3"]}
-
-Be SPECIFIC. Real menu paths. Justify everything by scenario + lens + conditions.`;
-}
-
-/* ─── STYLES ─── */
-const FONTS = "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap";
-const C = {
-  bg:"#0c0c0b",srf:"#141413",bdr:"rgba(255,255,255,0.06)",bdrA:"rgba(200,185,160,0.3)",
-  gold:"#c8b9a0",gD:"#8a7d6a",gB:"#e8dcc8",txt:"#c4c0b8",tD:"#6a6a64",tM:"#4a4a46",
-  acc:"#d4a574",red:"#c87060",grn:"#70c880",blu:"#70b4c8",wrn:"#b4a050",
+const T = {
+  bg:        "#0a0a0c",
+  bgWarm:    "#1a1410",
+  glass:     "rgba(28, 26, 24, 0.55)",
+  glassLite: "rgba(40, 36, 32, 0.45)",
+  glassBri:  "rgba(60, 54, 46, 0.55)",
+  stroke:    "rgba(255, 240, 210, 0.08)",
+  strokeHi:  "rgba(232, 208, 160, 0.22)",
+  strokeAct: "rgba(232, 208, 160, 0.42)",
+  gold:      "#e8d0a0",
+  goldSoft:  "#c8b088",
+  goldDim:   "#8a7a5e",
+  amber:     "#d4a574",
+  text:      "#e8e4dc",
+  textMid:   "#a8a49c",
+  textDim:   "#6a6660",
+  textFaint: "#44423e",
+  grn:       "#80c88a",
+  blu:       "#80b4c8",
+  red:       "#d88878",
+  wrn:       "#c8a860",
+  violet:    "#a898c8",
 };
 
-/* ─── COMPONENTS ─── */
-function Card({sel,onClick,icon,label,tag}){return(
-  <button onClick={onClick} style={{padding:"14px",cursor:"pointer",textAlign:"left",width:"100%",background:sel?"rgba(200,185,160,0.08)":C.srf,border:`1px solid ${sel?C.bdrA:C.bdr}`,borderRadius:10,transition:"all .15s",fontFamily:"'Outfit',sans-serif",display:"flex",alignItems:"center",gap:12}}>
-    <span style={{fontSize:26,flexShrink:0,lineHeight:1}}>{icon}</span>
-    <div style={{minWidth:0}}>
-      <div style={{fontSize:13,fontWeight:600,color:sel?C.gB:"#aaa",fontFamily:"'JetBrains Mono',monospace"}}>{label}</div>
-      <div style={{fontSize:11,color:C.tD,marginTop:2}}>{tag}</div>
-    </div>
-  </button>
-);}
-
-function Chip({sel,onClick,label,desc,d}){
-  const dc={EASY:C.grn,READY:C.blu,TRACK:C.wrn,HARD:C.red,CHILL:C.grn};
-  return(<button onClick={onClick} style={{padding:"13px 16px",cursor:"pointer",textAlign:"left",width:"100%",background:sel?"rgba(200,185,160,0.08)":C.srf,border:`1px solid ${sel?C.bdrA:C.bdr}`,borderRadius:10,transition:"all .15s",fontFamily:"'Outfit',sans-serif",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-    <div><div style={{fontSize:13,fontWeight:600,color:sel?C.gB:"#aaa"}}>{label}</div><div style={{fontSize:11,color:C.tD,marginTop:2}}>{desc}</div></div>
-    {d&&<span style={{fontSize:9,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",padding:"3px 7px",borderRadius:5,flexShrink:0,background:`${dc[d]||C.tD}18`,color:dc[d]||C.tD}}>{d}</span>}
-  </button>);
-}
-
-function SL({children}){return <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.12em",color:C.tD,fontFamily:"'JetBrains Mono',monospace",marginBottom:10,marginTop:28}}>{children}</div>;}
-function SC({label,value,sub}){return(
-  <div style={{background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:"12px 10px",textAlign:"center"}}>
-    <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.08em",color:C.tD,fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{label}</div>
-    <div style={{fontSize:16,fontWeight:700,color:C.gB,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.15,wordBreak:"break-word"}}>{value}</div>
-    {sub&&<div style={{fontSize:9,color:C.tM,marginTop:3}}>{sub}</div>}
-  </div>
-);}
-function BR({label,value,icon}){return(
-  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.bdr}`}}>
-    <div style={{display:"flex",alignItems:"center",gap:8}}>{icon&&<span style={{fontSize:10,opacity:.4,fontFamily:"'JetBrains Mono',monospace"}}>{icon}</span>}<span style={{fontSize:11,color:C.tD,fontFamily:"'JetBrains Mono',monospace"}}>{label}</span></div>
-    <span style={{fontSize:11,color:C.gold,fontFamily:"'JetBrains Mono',monospace",fontWeight:500,textAlign:"right",maxWidth:"55%"}}>{value}</span>
-  </div>
-);}
-function RS({title,icon,children,ac}){return(
-  <div style={{background:ac?`${ac}08`:"transparent",border:`1px solid ${ac?`${ac}20`:C.bdr}`,borderRadius:12,padding:16,marginBottom:12}}>
-    <div style={{fontSize:10,textTransform:"uppercase",letterSpacing:"0.1em",color:ac||C.gD,fontFamily:"'JetBrains Mono',monospace",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>{icon&&<span style={{fontSize:13}}>{icon}</span>}{title}</div>
-    {children}
-  </div>
-);}
-
-/* ─── LENS KIT PANEL ─── */
-function KitPanel({kit,setKit,onClose}){
-  const [q,setQ]=useState("");
-  const cats={};LENS_DB.forEach(l=>{if(!cats[l.cat])cats[l.cat]=[];cats[l.cat].push(l);});
-  const fl=q.trim()?LENS_DB.filter(l=>l.name.toLowerCase().includes(q.toLowerCase())||l.equiv.includes(q)):LENS_DB;
-  const fc={};fl.forEach(l=>{if(!fc[l.cat])fc[l.cat]=[];fc[l.cat].push(l);});
-  const tog=id=>{const n=kit.includes(id)?kit.filter(x=>x!==id):[...kit,id];setKit(n);};
-  return(
-    <div style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(8px)",display:"flex",flexDirection:"column"}}>
-      <div style={{maxWidth:600,width:"100%",margin:"0 auto",flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-        <div style={{padding:"20px 20px 0",flexShrink:0}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-            <div><div style={{fontSize:16,fontWeight:700,color:C.gB}}>My Lens Kit</div><div style={{fontSize:11,color:C.tD,marginTop:2}}>{kit.length} selected</div></div>
-            <button onClick={onClose} style={{padding:"8px 16px",border:`1px solid ${C.bdrA}`,background:"transparent",borderRadius:8,color:C.gold,fontSize:12,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Done</button>
-          </div>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search lenses…" style={{width:"100%",padding:"10px 14px",background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,fontSize:13,fontFamily:"'Outfit',sans-serif",outline:"none",marginBottom:12}}/>
-        </div>
-        <div style={{flex:1,overflow:"auto",padding:"0 20px 20px"}}>
-          {Object.entries(fc).map(([cat,lenses])=>(
-            <div key={cat}>
-              <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.1em",color:C.tD,fontFamily:"'JetBrains Mono',monospace",margin:"14px 0 6px",position:"sticky",top:0,background:"rgba(12,12,11,0.95)",padding:"4px 0",zIndex:2}}>{cat}</div>
-              {lenses.map(l=>{const own=kit.includes(l.id);return(
-                <button key={l.id} onClick={()=>tog(l.id)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"10px 12px",marginBottom:4,cursor:"pointer",textAlign:"left",background:own?"rgba(200,185,160,0.08)":C.srf,border:`1px solid ${own?C.bdrA:C.bdr}`,borderRadius:8,fontFamily:"'Outfit',sans-serif"}}>
-                  <div><div style={{fontSize:12,fontWeight:600,color:own?C.gB:"#999"}}>{l.name}</div><div style={{fontSize:10,color:C.tD,marginTop:1}}>{l.equiv} · f/{l.maxAp}{l.syncIS?" · Sync IS":""}</div></div>
-                  <div style={{width:20,height:20,borderRadius:5,flexShrink:0,border:`1.5px solid ${own?C.gold:C.bdr}`,background:own?C.gold:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:C.bg,fontWeight:700}}>{own?"✓":""}</div>
-                </button>
-              );})}
-            </div>
-          ))}
-        </div>
-      </div>
+/* ─── ATMOSPHERIC BACKGROUND ─── */
+function AtmoBg() {
+  return (
+    <div aria-hidden style={{
+      position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+      background: `
+        radial-gradient(ellipse at 20% 10%, rgba(216, 168, 96, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 90%, rgba(120, 96, 72, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(40, 30, 22, 0.4) 0%, transparent 70%),
+        linear-gradient(180deg, #0a0a0c 0%, #140f0a 50%, #0a0a0c 100%)
+      `,
+    }}>
+      {/* grain texture */}
+      <div style={{
+        position: "absolute", inset: 0,
+        background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.94 0 0 0 0 0.82 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        opacity: 0.6, mixBlendMode: "overlay",
+      }} />
     </div>
   );
 }
 
-/* ─── LENS SELECTOR ─── */
-function LensSel({kit,mt,setMt,bag,setBag}){
-  const lenses=kit.map(id=>LENS_DB.find(l=>l.id===id)).filter(l=>l&&l.type!=="tc");
-  if(!lenses.length)return null;
-  return(<div>
-    <SL>What's on the camera?</SL>
-    <div style={{display:"flex",flexDirection:"column",gap:4}}>
-      {lenses.map(l=>{const isM=mt===l.id,isB=bag.includes(l.id);return(
-        <div key={l.id} style={{display:"flex",gap:4}}>
-          <button onClick={()=>setMt(isM?null:l.id)} style={{flex:1,padding:"10px 12px",cursor:"pointer",textAlign:"left",background:isM?"rgba(200,185,160,0.1)":C.srf,border:`1px solid ${isM?C.bdrA:C.bdr}`,borderRadius:8,fontFamily:"'Outfit',sans-serif"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:11,color:isM?C.gB:C.tM}}>{isM?"◉":"○"}</span>
-              <div><div style={{fontSize:12,fontWeight:600,color:isM?C.gB:"#999"}}>{l.name.replace("M.Zuiko ","")}</div><div style={{fontSize:10,color:C.tD}}>{l.equiv}{l.syncIS?" · Sync IS":""}</div></div>
-            </div>
-          </button>
-          {!isM&&<button onClick={()=>setBag(isB?bag.filter(x=>x!==l.id):[...bag,l.id])} title="In bag" style={{width:40,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:isB?"rgba(112,180,200,0.08)":C.srf,border:`1px solid ${isB?"rgba(112,180,200,0.25)":C.bdr}`,borderRadius:8,fontSize:14,fontFamily:"'Outfit',sans-serif"}}><span style={{opacity:isB?1:0.3}}>🎒</span></button>}
-        </div>
-      );})}
-    </div>
-    {mt&&bag.length>0&&<div style={{fontSize:10,color:C.tD,marginTop:6}}><span style={{color:C.blu}}>🎒 In bag:</span> {bag.map(id=>LENS_DB.find(l=>l.id===id)?.name.replace("M.Zuiko ","")).join(", ")}</div>}
-    {!mt&&<div style={{fontSize:10,color:C.tM,marginTop:6}}>Tap a lens to set as mounted, or just hit Get Settings for a recommendation</div>}
-  </div>);
+/* ─── GLASS PRIMITIVES ─── */
+const glass = (variant = "base") => ({
+  background: variant === "bri" ? T.glassBri : variant === "lite" ? T.glassLite : T.glass,
+  backdropFilter: "blur(20px) saturate(1.2)",
+  WebkitBackdropFilter: "blur(20px) saturate(1.2)",
+  border: `1px solid ${T.stroke}`,
+  borderRadius: 14,
+});
+
+function GlassCard({ children, style = {}, variant = "base", active = false }) {
+  return (
+    <div style={{
+      ...glass(variant),
+      border: `1px solid ${active ? T.strokeAct : T.stroke}`,
+      padding: 14,
+      transition: "border-color .2s, background .2s",
+      ...style,
+    }}>{children}</div>
+  );
 }
 
-/* ─── FORECAST ANALYSIS ─── */
+function Label({ children, accent }) {
+  return (
+    <div style={{
+      fontSize: 10, textTransform: "uppercase", letterSpacing: "0.14em",
+      color: accent || T.textDim, fontFamily: "'JetBrains Mono', monospace",
+      marginBottom: 10, marginTop: 24, fontWeight: 500,
+    }}>{children}</div>
+  );
+}
+
+/* ─── WEATHER HELPERS ─── */
+function parseW(w) {
+  if (!w) return { label: "Unknown", icon: "☁️", tone: "neutral" };
+  const c = w.weathercode;
+  if (c <= 1)  return { label: "Clear",         icon: "☀️", tone: "bright" };
+  if (c <= 3)  return { label: "Partly Cloudy", icon: "⛅", tone: "diffused" };
+  if (c <= 48) return { label: "Overcast",      icon: "☁️", tone: "flat" };
+  if (c <= 67) return { label: "Rain",          icon: "🌧️", tone: "moody" };
+  if (c <= 77) return { label: "Snow",          icon: "❄️", tone: "cold" };
+  return { label: "Storm", icon: "⛈️", tone: "moody" };
+}
+
 function analyzeForecast(forecast, currentWeather) {
   if (!forecast || !forecast.time) return null;
   const now = new Date();
   const nowH = now.getHours();
-
-  // Find current hour index
   const times = forecast.time.map(t => new Date(t));
   let startIdx = times.findIndex(t => t.getHours() >= nowH && t.getDate() === now.getDate());
   if (startIdx < 0) startIdx = 0;
-
   const upcoming = [];
   for (let i = startIdx; i < Math.min(startIdx + 12, times.length); i++) {
     upcoming.push({
@@ -435,37 +286,16 @@ function analyzeForecast(forecast, currentWeather) {
       isDay: forecast.is_day?.[i] || 1,
     });
   }
-
-  // Find next sun window (cloud < 50 and day)
-  let nextSun = null;
-  for (const h of upcoming) {
-    if (h.cloud < 50 && h.isDay) { nextSun = h; break; }
-  }
-
-  // Find next rain risk (prob > 40)
-  let nextRain = null;
-  for (const h of upcoming) {
-    if (h.rainProb > 40) { nextRain = h; break; }
-  }
-
-  // Find next clear-ish window (cloud < 30)
-  let nextClear = null;
-  for (const h of upcoming) {
-    if (h.cloud < 30 && h.isDay) { nextClear = h; break; }
-  }
-
-  // Golden hour calc (rough: sunset - 1hr)
-  // Simple approximation for UK latitude
+  let nextSun = null, nextRain = null;
+  for (const h of upcoming) { if (!nextSun && h.cloud < 50 && h.isDay) nextSun = h; }
+  for (const h of upcoming) { if (!nextRain && h.rainProb > 40) nextRain = h; }
   const month = now.getMonth();
   const sunsetApprox = [16.5, 17.2, 18, 19.8, 20.8, 21.3, 21, 20.2, 19, 17.8, 16.5, 16][month];
   const goldenStart = Math.floor(sunsetApprox - 1);
   const goldenMin = Math.round((sunsetApprox - 1 - goldenStart) * 60);
-
-  // Drone assessment
-  const droneOk = currentWeather && currentWeather.windspeed < 30;
-  const droneRisky = currentWeather && currentWeather.windspeed >= 20 && currentWeather.windspeed < 30;
-
-  return { upcoming, nextSun, nextRain, nextClear, goldenStart, goldenMin, sunsetApprox, droneOk, droneRisky };
+  const windNow = currentWeather?.windspeed || 0;
+  const droneStatus = windNow >= 30 ? "grounded" : windNow >= 20 ? "risky" : "good";
+  return { upcoming, nextSun, nextRain, goldenStart, goldenMin, sunsetApprox, droneStatus };
 }
 
 function formatHour(h) {
@@ -474,12 +304,61 @@ function formatHour(h) {
   return h < 12 ? `${h}am` : `${h - 12}pm`;
 }
 
+/* ─── WEATHER ORB (atmospheric visual) ─── */
+function WeatherOrb({ weather }) {
+  if (!weather) return null;
+  const c = weather.weathercode;
+  const isN = weather.is_day === 0;
+  const isClear = c <= 1;
+  const isPartly = c >= 2 && c <= 3;
+  const isOvercast = c >= 4 && c <= 48;
+  const isRain = c >= 51 && c <= 67;
+  const isSnow = c >= 71 && c <= 77;
+  const isStorm = c >= 80;
+
+  let centreColor, edgeColor, iconChar;
+  if (isN) { centreColor = "#6a7096"; edgeColor = "#1a1d30"; iconChar = isClear ? "☽" : "☁"; }
+  else if (isClear) { centreColor = "#f4d890"; edgeColor = "#8a6830"; iconChar = "☀"; }
+  else if (isPartly) { centreColor = "#d4c088"; edgeColor = "#6a5c40"; iconChar = "⛅"; }
+  else if (isOvercast) { centreColor = "#a0a0a0"; edgeColor = "#484848"; iconChar = "☁"; }
+  else if (isRain) { centreColor = "#80a0c0"; edgeColor = "#304050"; iconChar = "☂"; }
+  else if (isSnow) { centreColor = "#d8e0ea"; edgeColor = "#5a6878"; iconChar = "❄"; }
+  else { centreColor = "#a080a0"; edgeColor = "#302040"; iconChar = "⚡"; }
+
+  return (
+    <div style={{ position: "relative", width: 72, height: 72, flexShrink: 0 }}>
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        background: `radial-gradient(circle at 35% 30%, ${centreColor}, ${edgeColor} 70%, transparent 100%)`,
+        filter: "blur(1px)", opacity: 0.9,
+      }} />
+      <div style={{
+        position: "absolute", inset: -8, borderRadius: "50%",
+        background: `radial-gradient(circle, ${centreColor}40, transparent 60%)`,
+        filter: "blur(8px)",
+      }} />
+      <div style={{
+        position: "absolute", inset: 0, display: "flex",
+        alignItems: "center", justifyContent: "center",
+        fontSize: 30, color: "#1a1410", fontWeight: 300, textShadow: `0 0 8px ${centreColor}80`,
+      }}>{iconChar}</div>
+    </div>
+  );
+}
+
 /* ─── CONDITIONS DASHBOARD ─── */
 function ConditionsDash({ weather, forecast, weatherLive }) {
   if (!weather) return (
-    <div style={{ textAlign: "center", padding: "40px 20px", color: C.tD }}>
-      <div style={{ width: 20, height: 20, border: `2px solid ${C.bdr}`, borderTop: `2px solid ${C.gB}`, borderRadius: "50%", margin: "0 auto 10px", animation: "spin .8s linear infinite" }} />
-      <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>Reading conditions…</div>
+    <div style={{ ...glass(), padding: "36px 20px", textAlign: "center" }}>
+      <div style={{
+        width: 20, height: 20,
+        border: `2px solid ${T.stroke}`, borderTop: `2px solid ${T.gold}`,
+        borderRadius: "50%", margin: "0 auto 12px",
+        animation: "spin .8s linear infinite",
+      }} />
+      <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: T.textDim }}>
+        Reading conditions…
+      </div>
     </div>
   );
 
@@ -489,116 +368,295 @@ function ConditionsDash({ weather, forecast, weatherLive }) {
   const wind = Math.round(weather.windspeed);
   const info = analyzeForecast(forecast, weather);
 
-  // Light quality assessment
   let lightLabel, lightColor;
-  if (isN) { lightLabel = "Night"; lightColor = "#6a7aaa"; }
-  else if (weather.weathercode <= 1) { lightLabel = "Bright / harsh"; lightColor = "#d0a840"; }
-  else if (weather.weathercode <= 3) { lightLabel = "Nice diffused"; lightColor = C.grn; }
-  else if (weather.weathercode <= 48) { lightLabel = "Soft / flat"; lightColor = C.blu; }
-  else { lightLabel = "Dark / moody"; lightColor = "#8a7090"; }
+  if (isN) { lightLabel = "Night"; lightColor = T.violet; }
+  else if (weather.weathercode <= 1) { lightLabel = "Bright & hard"; lightColor = T.wrn; }
+  else if (weather.weathercode <= 3) { lightLabel = "Diffused"; lightColor = T.grn; }
+  else if (weather.weathercode <= 48) { lightLabel = "Soft & flat"; lightColor = T.blu; }
+  else { lightLabel = "Dark & moody"; lightColor = T.violet; }
+
+  const droneColour = info?.droneStatus === "good" ? T.grn : info?.droneStatus === "risky" ? T.wrn : T.red;
+  const droneLabel  = info?.droneStatus === "good" ? "Good to fly" : info?.droneStatus === "risky" ? "Risky" : "Grounded";
+  const droneDetail = info?.droneStatus === "good" ? "Conditions look fine" : info?.droneStatus === "risky" ? "Flyable, expect drift" : `${wind}km/h — too gusty`;
 
   return (
-    <div style={{ marginTop: 16 }}>
-      {/* Weather Scene */}
-      <WeatherScene weather={weather} />
-
-      {/* Conditions Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 8 }}>
-        <div style={{ background: C.srf, border: `1px solid ${C.bdr}`, borderRadius: 10, padding: "12px" }}>
-          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: C.tD, fontFamily: "'JetBrains Mono',monospace", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span>Right now</span>
-            <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: weatherLive ? `${C.grn}15` : `${C.wrn}15`, color: weatherLive ? C.grn : C.wrn }}>{weatherLive ? "● LIVE" : "◌ SNAPSHOT"}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 22 }}>{isN ? "🌙" : wi.icon}</span>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: C.gB, fontFamily: "'JetBrains Mono',monospace", lineHeight: 1 }}>{temp}°C</div>
-              <div style={{ fontSize: 11, color: C.tD, marginTop: 2 }}>{wi.label}</div>
+    <div>
+      {/* PRIMARY — hero glass panel */}
+      <GlassCard variant="bri" style={{ padding: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <WeatherOrb weather={weather} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+              <div style={{
+                fontFamily: "'Fraunces', serif", fontWeight: 600,
+                fontSize: 34, color: T.text, letterSpacing: "-0.02em", lineHeight: 1,
+              }}>{temp}°</div>
+              <div style={{
+                fontSize: 11, padding: "2px 8px", borderRadius: 10,
+                background: weatherLive ? `${T.grn}18` : `${T.wrn}18`,
+                color: weatherLive ? T.grn : T.wrn,
+                fontFamily: "'JetBrains Mono', monospace", fontWeight: 500,
+              }}>{weatherLive ? "● LIVE" : "◌ SNAPSHOT"}</div>
+            </div>
+            <div style={{ fontSize: 13, color: T.textMid, marginBottom: 6 }}>{wi.label} · Stockport</div>
+            <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textDim, fontFamily: "'JetBrains Mono', monospace" }}>
+              <span><span style={{ color: lightColor }}>●</span> {lightLabel}</span>
+              <span><span style={{ color: wind > 30 ? T.red : wind > 20 ? T.wrn : T.grn }}>●</span> {wind} km/h</span>
+              <span><span style={{ color: droneColour }}>●</span> 🚁 {droneLabel}</span>
             </div>
           </div>
         </div>
+      </GlassCard>
 
-        <div style={{ background: C.srf, border: `1px solid ${C.bdr}`, borderRadius: 10, padding: "12px" }}>
-          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: C.tD, fontFamily: "'JetBrains Mono',monospace", marginBottom: 6 }}>Light quality</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: lightColor, fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.2 }}>{lightLabel}</div>
-          <div style={{ fontSize: 10, color: C.tD, marginTop: 4 }}>
-            {isN ? "Low ISO + tripod territory" :
-             weather.weathercode <= 1 ? "Watch for blown highlights" :
-             weather.weathercode <= 3 ? "Great for most subjects" :
-             weather.weathercode <= 48 ? "Even tones, no harsh shadows" :
-             "Boost ISO, embrace the mood"}
-          </div>
-        </div>
-      </div>
-
-      {/* Wind + Drone */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 6 }}>
-        <div style={{ background: C.srf, border: `1px solid ${wind > 30 ? `${C.red}30` : C.bdr}`, borderRadius: 10, padding: "12px" }}>
-          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: C.tD, fontFamily: "'JetBrains Mono',monospace", marginBottom: 4 }}>Wind</div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: wind > 30 ? C.red : wind > 20 ? C.wrn : C.gB, fontFamily: "'JetBrains Mono',monospace" }}>{wind} km/h</div>
-          <div style={{ fontSize: 10, color: C.tD, marginTop: 2 }}>
-            {wind < 10 ? "Dead calm — long exposures fine" :
-             wind < 20 ? "Light breeze — no issues" :
-             wind < 30 ? "Breezy — brace for tele shots" :
-             "Strong — tripod may shake"}
-          </div>
-        </div>
-
-        <div style={{ background: C.srf, border: `1px solid ${!info?.droneOk ? `${C.red}30` : C.bdr}`, borderRadius: 10, padding: "12px" }}>
-          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: C.tD, fontFamily: "'JetBrains Mono',monospace", marginBottom: 4 }}>🚁 Drone</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: info?.droneOk ? (info?.droneRisky ? C.wrn : C.grn) : C.red, fontFamily: "'JetBrains Mono',monospace" }}>
-            {info?.droneOk ? (info?.droneRisky ? "Risky" : "Good to fly") : "Grounded"}
-          </div>
-          <div style={{ fontSize: 10, color: C.tD, marginTop: 2 }}>
-            {!info?.droneOk ? `${wind}km/h — too gusty for Mini 4 Pro` :
-             info?.droneRisky ? "Flyable but expect drift" :
-             "Conditions look fine"}
-          </div>
-        </div>
-      </div>
-
-      {/* Forecast alerts */}
+      {/* FORECAST ALERTS */}
       {info && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
           {info.nextSun && weather.weathercode > 3 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: `${C.wrn}08`, border: `1px solid ${C.wrn}15`, borderRadius: 8 }}>
-              <span style={{ fontSize: 13 }}>☀️</span>
-              <div style={{ fontSize: 11, color: C.wrn }}>Sun due around <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>{formatHour(info.nextSun.hour)}</span> <span style={{ color: C.tD }}>({info.nextSun.cloud}% cloud)</span></div>
-            </div>
+            <AlertRow icon="☀️" colour={T.wrn} text={`Sun due around ${formatHour(info.nextSun.hour)}`} detail={`${info.nextSun.cloud}% cloud`} />
           )}
-
           {info.nextRain && weather.weathercode < 50 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: `${C.blu}08`, border: `1px solid ${C.blu}15`, borderRadius: 8 }}>
-              <span style={{ fontSize: 13 }}>🌧️</span>
-              <div style={{ fontSize: 11, color: C.blu }}>Rain risk from <span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>{formatHour(info.nextRain.hour)}</span> <span style={{ color: C.tD }}>({info.nextRain.rainProb}% chance)</span></div>
-            </div>
+            <AlertRow icon="🌧️" colour={T.blu} text={`Rain risk from ${formatHour(info.nextRain.hour)}`} detail={`${info.nextRain.rainProb}% chance`} />
           )}
-
           {!isN && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: `${C.acc}08`, border: `1px solid ${C.acc}15`, borderRadius: 8 }}>
-              <span style={{ fontSize: 13 }}>🌅</span>
-              <div style={{ fontSize: 11, color: C.acc }}>Golden hour starts ~<span style={{ fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>{info.goldenStart}:{String(info.goldenMin).padStart(2,"0")}</span> <span style={{ color: C.tD }}>(sunset ~{Math.floor(info.sunsetApprox)}:{String(Math.round((info.sunsetApprox % 1) * 60)).padStart(2,"0")})</span></div>
-            </div>
+            <AlertRow
+              icon="🌅" colour={T.amber}
+              text={`Golden hour ~${info.goldenStart}:${String(info.goldenMin).padStart(2,"0")}`}
+              detail={`sunset ~${Math.floor(info.sunsetApprox)}:${String(Math.round((info.sunsetApprox % 1) * 60)).padStart(2,"0")}`}
+            />
           )}
         </div>
       )}
 
-      {/* Mini hourly strip */}
+      {/* HOURLY STRIP */}
       {info?.upcoming?.length > 0 && (
-        <div style={{ marginTop: 8, padding: "10px 12px", background: C.srf, border: `1px solid ${C.bdr}`, borderRadius: 10 }}>
-          <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", color: C.tD, fontFamily: "'JetBrains Mono',monospace", marginBottom: 8 }}>Next few hours</div>
-          <div style={{ display: "flex", gap: 0, overflow: "auto" }}>
-            {info.upcoming.slice(0, 8).map((h, i) => {
-              const hW = { weathercode: h.code, is_day: h.isDay };
-              const hw = parseW(hW);
+        <GlassCard style={{ marginTop: 8, padding: "12px 10px" }}>
+          <div style={{
+            fontSize: 9, textTransform: "uppercase", letterSpacing: "0.14em",
+            color: T.textDim, fontFamily: "'JetBrains Mono', monospace",
+            marginBottom: 10, paddingLeft: 4,
+          }}>Next hours</div>
+          <div style={{ display: "flex", gap: 2, overflow: "auto", paddingBottom: 2 }}>
+            {info.upcoming.slice(0, 10).map((h, i) => {
+              const hw = parseW({ weathercode: h.code, is_day: h.isDay });
               const isNow = i === 0;
               return (
-                <div key={i} style={{ flex: "0 0 auto", width: 44, textAlign: "center", padding: "4px 2px", borderRadius: 6, background: isNow ? `${C.gold}10` : "transparent" }}>
-                  <div style={{ fontSize: 9, color: isNow ? C.gold : C.tM, fontFamily: "'JetBrains Mono',monospace", fontWeight: isNow ? 700 : 400 }}>{isNow ? "now" : formatHour(h.hour)}</div>
-                  <div style={{ fontSize: 14, margin: "2px 0" }}>{h.isDay ? hw.icon : "🌙"}</div>
-                  <div style={{ fontSize: 9, color: C.tD, fontFamily: "'JetBrains Mono',monospace" }}>{h.temp}°</div>
-                  {h.rainProb > 30 && <div style={{ fontSize: 8, color: C.blu, fontFamily: "'JetBrains Mono',monospace" }}>{h.rainProb}%💧</div>}
+                <div key={i} style={{
+                  flex: "0 0 auto", width: 48, textAlign: "center",
+                  padding: "6px 2px", borderRadius: 8,
+                  background: isNow ? `${T.gold}12` : "transparent",
+                  border: isNow ? `1px solid ${T.gold}30` : "1px solid transparent",
+                }}>
+                  <div style={{
+                    fontSize: 9, color: isNow ? T.gold : T.textDim,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontWeight: isNow ? 700 : 400,
+                  }}>{isNow ? "now" : formatHour(h.hour)}</div>
+                  <div style={{ fontSize: 15, margin: "3px 0" }}>{h.isDay ? hw.icon : "🌙"}</div>
+                  <div style={{ fontSize: 9, color: T.textMid, fontFamily: "'JetBrains Mono', monospace" }}>{h.temp}°</div>
+                  {h.rainProb > 30 && (
+                    <div style={{ fontSize: 8, color: T.blu, fontFamily: "'JetBrains Mono', monospace", marginTop: 1 }}>{h.rainProb}%</div>
+                  )}
                 </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+      )}
+    </div>
+  );
+}
+
+function AlertRow({ icon, colour, text, detail }) {
+  return (
+    <div style={{
+      ...glass("lite"),
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "9px 14px", borderRadius: 10,
+      borderColor: `${colour}20`, background: `${colour}10`,
+    }}>
+      <span style={{ fontSize: 13 }}>{icon}</span>
+      <div style={{ fontSize: 11, color: colour, flex: 1 }}>
+        <span style={{ fontWeight: 600 }}>{text}</span>
+        {detail && <span style={{ color: T.textDim, marginLeft: 6, fontFamily: "'JetBrains Mono', monospace" }}>({detail})</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ─── HORIZONTAL MODE SCROLLER ─── */
+function ModeScroller({ modes, selected, onSelect }) {
+  return (
+    <div style={{
+      display: "flex", gap: 8, overflow: "auto",
+      padding: "4px 2px 12px", scrollSnapType: "x proximity",
+      scrollbarWidth: "thin", scrollbarColor: `${T.stroke} transparent`,
+    }}>
+      {modes.map(m => {
+        const active = selected === m.id;
+        return (
+          <button key={m.id} onClick={() => onSelect(m.id)} style={{
+            flex: "0 0 auto", width: 120, scrollSnapAlign: "start",
+            ...glass(active ? "bri" : "base"),
+            border: `1px solid ${active ? T.strokeAct : T.stroke}`,
+            padding: "14px 12px", cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+            fontFamily: "'Inter', sans-serif", transition: "all .15s",
+          }}>
+            <span style={{ fontSize: 26, lineHeight: 1 }}>{m.icon}</span>
+            <div style={{
+              fontSize: 12, fontWeight: 600,
+              color: active ? T.text : T.textMid,
+              fontFamily: "'JetBrains Mono', monospace",
+            }}>{m.label}</div>
+            <div style={{ fontSize: 9, color: T.textDim, lineHeight: 1.2, textAlign: "center" }}>{m.sub}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── TOP TABS: OM-1 / DJI ─── */
+function TopTabs({ active, onChange }) {
+  const tabs = [
+    { id: "om1", label: "OM-1 II", icon: "◎" },
+    { id: "dji", label: "DJI Mini 4 Pro", icon: "◢" },
+  ];
+  return (
+    <div style={{
+      ...glass("bri"), padding: 4, display: "flex", gap: 4,
+      borderRadius: 14, marginBottom: 16,
+    }}>
+      {tabs.map(t => {
+        const isActive = active === t.id;
+        return (
+          <button key={t.id} onClick={() => onChange(t.id)} style={{
+            flex: 1, padding: "10px 14px", cursor: "pointer",
+            background: isActive
+              ? `linear-gradient(135deg, ${T.gold}20, ${T.amber}15)`
+              : "transparent",
+            border: `1px solid ${isActive ? T.strokeAct : "transparent"}`,
+            borderRadius: 11,
+            color: isActive ? T.text : T.textMid,
+            fontFamily: "'Inter', sans-serif",
+            fontSize: 13, fontWeight: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            transition: "all .2s",
+          }}>
+            <span style={{ fontSize: 14, color: isActive ? T.gold : T.textDim }}>{t.icon}</span>
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── SELECTION CARD (glass) ─── */
+function SelCard({ sel, onClick, icon, label, tag, difficulty }) {
+  const dColor = { EASY: T.grn, READY: T.blu, TRACK: T.wrn, HARD: T.red }[difficulty];
+  return (
+    <button onClick={onClick} style={{
+      ...glass(sel ? "bri" : "base"),
+      border: `1px solid ${sel ? T.strokeAct : T.stroke}`,
+      padding: "13px 14px", cursor: "pointer", textAlign: "left",
+      width: "100%", display: "flex", alignItems: "center", gap: 12,
+      fontFamily: "'Inter', sans-serif", transition: "all .15s",
+      position: "relative",
+    }}>
+      {icon && <span style={{ fontSize: 24, flexShrink: 0 }}>{icon}</span>}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{
+          fontSize: 13, fontWeight: 600,
+          color: sel ? T.text : T.textMid,
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>{label}</div>
+        {tag && <div style={{ fontSize: 10, color: T.textDim, marginTop: 2 }}>{tag}</div>}
+      </div>
+      {difficulty && (
+        <span style={{
+          fontSize: 8, fontWeight: 700,
+          fontFamily: "'JetBrains Mono', monospace",
+          padding: "3px 7px", borderRadius: 5, flexShrink: 0,
+          background: `${dColor}20`, color: dColor, letterSpacing: "0.08em",
+        }}>{difficulty}</span>
+      )}
+    </button>
+  );
+}
+
+/* ─── LENS TABS WITH TC TOGGLE ─── */
+function LensTabs({ kit, mounted, setMounted, tc, setTc }) {
+  const lenses = kit.map(id => LENS_DB.find(l => l.id === id)).filter(Boolean);
+  if (!lenses.length) return null;
+
+  const mountedLens = mounted ? LENS_DB.find(l => l.id === mounted) : null;
+  const canTC = mountedLens?.tc;
+
+  return (
+    <div>
+      <Label>Lens mounted</Label>
+      <div style={{
+        display: "flex", gap: 6, overflow: "auto",
+        padding: "2px 2px 8px", scrollSnapType: "x proximity",
+        scrollbarWidth: "thin",
+      }}>
+        <button onClick={() => setMounted(null)} style={{
+          flex: "0 0 auto", scrollSnapAlign: "start",
+          ...glass(mounted === null ? "bri" : "base"),
+          border: `1px solid ${mounted === null ? T.strokeAct : T.stroke}`,
+          padding: "10px 14px", cursor: "pointer",
+          fontSize: 12, fontWeight: 600,
+          color: mounted === null ? T.text : T.textMid,
+          fontFamily: "'JetBrains Mono', monospace",
+          whiteSpace: "nowrap", transition: "all .15s",
+        }}>Auto-pick</button>
+        {lenses.map(l => {
+          const active = mounted === l.id;
+          return (
+            <button key={l.id} onClick={() => { setMounted(l.id); if (!l.tc) setTc("none"); }} style={{
+              flex: "0 0 auto", scrollSnapAlign: "start",
+              ...glass(active ? "bri" : "base"),
+              border: `1px solid ${active ? T.strokeAct : T.stroke}`,
+              padding: "10px 14px", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
+              fontFamily: "'Inter', sans-serif",
+              whiteSpace: "nowrap", transition: "all .15s",
+            }}>
+              <div style={{
+                fontSize: 12, fontWeight: 600,
+                color: active ? T.text : T.textMid,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>{l.short}</div>
+              <div style={{ fontSize: 9, color: T.textDim }}>{l.equiv}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TC TOGGLE — only on compatible lenses */}
+      {canTC && (
+        <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em",
+            color: T.textDim, fontFamily: "'JetBrains Mono', monospace",
+          }}>Teleconverter</div>
+          <div style={{
+            ...glass("lite"), padding: 3, display: "flex", gap: 2, borderRadius: 10,
+          }}>
+            {TC_OPTIONS.map(opt => {
+              const active = tc === opt.id;
+              return (
+                <button key={opt.id} onClick={() => setTc(opt.id)} style={{
+                  padding: "6px 12px", cursor: "pointer",
+                  background: active ? `${T.gold}25` : "transparent",
+                  border: "none",
+                  borderRadius: 8,
+                  color: active ? T.gold : T.textDim,
+                  fontSize: 11, fontWeight: 600,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  transition: "all .15s",
+                }}>{opt.label}</button>
               );
             })}
           </div>
@@ -608,179 +666,1064 @@ function ConditionsDash({ weather, forecast, weatherLive }) {
   );
 }
 
-/* ═══════════ MAIN ═══════════ */
-export default function App(){
-  const [kit,setKit,kitLoaded]=usePersistedKit();
-  const [showKit,setShowKit]=useState(false);
-  const [mt,setMt]=useState(null);
-  const [bag,setBag]=useState([]);
-  const [mode,setMode]=useState(null);
-  const [animal,setAnimal]=useState("");
-  const [beh,setBeh]=useState("");
-  const [bird,setBird]=useState("");
-  const [birdSc,setBirdSc]=useState("");
-  const [land,setLand]=useState("");
-  const [extra,setExtra]=useState("");
-  const [weather,setW]=useState(null);
-  const [forecast,setForecast]=useState(null);
-  const [weatherLive,setWeatherLive]=useState(false);
-  const [result,setR]=useState(null);
-  const [loading,setL]=useState(false);
-  const [err,setErr]=useState(null);
-  const [showS,setShowS]=useState(false);
-  const rr=useRef(null);
+/* ─── LENS KIT MANAGEMENT ─── */
+function usePersistedKit() {
+  const [kit, setKitState] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      return s && s.length ? s : DEFAULT_KIT;
+    } catch { return DEFAULT_KIT; }
+  });
+  const setKit = useCallback((ids) => {
+    setKitState(ids);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(ids)); } catch {}
+  }, []);
+  return [kit, setKit];
+}
 
-  useEffect(()=>{
+function KitPanel({ kit, setKit, onClose }) {
+  const [q, setQ] = useState("");
+  const fl = q.trim()
+    ? LENS_DB.filter(l => l.name.toLowerCase().includes(q.toLowerCase()) || l.equiv.includes(q))
+    : LENS_DB;
+  const fc = {};
+  fl.forEach(l => { if (!fc[l.cat]) fc[l.cat] = []; fc[l.cat].push(l); });
+  const tog = id => {
+    const n = kit.includes(id) ? kit.filter(x => x !== id) : [...kit, id];
+    setKit(n);
+  };
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(5, 5, 8, 0.85)", backdropFilter: "blur(12px)",
+      display: "flex", flexDirection: "column",
+    }}>
+      <div style={{
+        maxWidth: 600, width: "100%", margin: "0 auto",
+        flex: 1, display: "flex", flexDirection: "column", overflow: "hidden",
+      }}>
+        <div style={{ padding: "22px 20px 0", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 600, color: T.text, fontFamily: "'Fraunces', serif", letterSpacing: "-0.01em" }}>My Lens Kit</div>
+              <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>{kit.length} selected</div>
+            </div>
+            <button onClick={onClose} style={{
+              ...glass("bri"),
+              padding: "8px 18px", borderRadius: 10,
+              color: T.gold, fontSize: 12, cursor: "pointer",
+              fontFamily: "'Inter', sans-serif", fontWeight: 600,
+              borderColor: T.strokeAct,
+            }}>Done</button>
+          </div>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search lenses…" style={{
+            width: "100%", padding: "11px 14px",
+            ...glass("lite"),
+            color: T.text, fontSize: 13,
+            fontFamily: "'Inter', sans-serif", outline: "none",
+            marginBottom: 12, borderRadius: 10,
+          }}/>
+        </div>
+        <div style={{ flex: 1, overflow: "auto", padding: "0 20px 20px" }}>
+          {Object.entries(fc).map(([cat, lenses]) => (
+            <div key={cat}>
+              <div style={{
+                fontSize: 9, textTransform: "uppercase", letterSpacing: "0.14em",
+                color: T.textDim, fontFamily: "'JetBrains Mono', monospace",
+                margin: "14px 0 6px", position: "sticky", top: 0,
+                background: "rgba(5, 5, 8, 0.95)", backdropFilter: "blur(8px)",
+                padding: "4px 0", zIndex: 2,
+              }}>{cat}</div>
+              {lenses.map(l => {
+                const own = kit.includes(l.id);
+                return (
+                  <button key={l.id} onClick={() => tog(l.id)} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    width: "100%", padding: "11px 14px", marginBottom: 4, cursor: "pointer",
+                    textAlign: "left",
+                    ...glass(own ? "bri" : "base"),
+                    border: `1px solid ${own ? T.strokeAct : T.stroke}`,
+                    borderRadius: 10,
+                    fontFamily: "'Inter', sans-serif",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: own ? T.text : T.textMid }}>{l.name}</div>
+                      <div style={{ fontSize: 10, color: T.textDim, marginTop: 1, fontFamily: "'JetBrains Mono', monospace" }}>
+                        {l.equiv} · f/{l.maxAp}{l.syncIS ? " · Sync IS" : ""}{l.tc ? " · TC" : ""}
+                      </div>
+                    </div>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                      border: `1.5px solid ${own ? T.gold : T.stroke}`,
+                      background: own ? T.gold : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 12, color: T.bg, fontWeight: 700,
+                    }}>{own ? "✓" : ""}</div>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── PROMPT BUILDERS (trimmed output) ─── */
+function buildOMPrompt(mode, sel, weather, extra, kit, mountedId, tcId) {
+  const w = parseW(weather);
+  const isN = weather?.is_day === 0;
+  const t = weather ? Math.round(weather.temperature) : null;
+  const wind = weather ? Math.round(weather.windspeed) : null;
+  const ws = weather
+    ? `CONDITIONS: ${w.label}, ${t}°C, wind ${wind}km/h. ${isN ? "Night." : "Day."}`
+    : "CONDITIONS: assume overcast UK.";
+
+  const ml = mountedId ? LENS_DB.find(l => l.id === mountedId) : null;
+  const tc = TC_OPTIONS.find(o => o.id === tcId) || TC_OPTIONS[0];
+  const bag = kit.filter(id => id !== mountedId).map(id => LENS_DB.find(l => l.id === id)).filter(Boolean);
+
+  let ls;
+  if (ml) {
+    const effMax = ml.maxAp * tc.mult;
+    const reach = tc.mult === 1 ? ml.equiv : `${Math.round(parseInt(ml.equiv) * tc.mult)}mm equiv`;
+    ls = `MOUNTED: ${ml.name}${tc.id !== "none" ? ` + ${tc.label}` : ""} (${reach}, max aperture effectively f/${effMax.toFixed(1)}${ml.syncIS ? ", Sync IS" : ""}). Tailor everything to THIS combo.`;
+    if (bag.length) ls += `\nIN BAG: ${bag.map(l => `${l.short} (${l.equiv}, f/${l.maxAp})`).join("; ")}. If a materially better lens exists for the situation, mention in would_swap (else null).`;
+  } else {
+    const all = kit.map(id => LENS_DB.find(l => l.id === id)).filter(Boolean);
+    ls = `LENS KIT AVAILABLE: ${all.map(l => `${l.short} (${l.equiv}, f/${l.maxAp}${l.tc ? ", TC-compat" : ""})`).join("; ")}. Pick the best lens for the scenario and put it in recommended_lens.`;
+  }
+
+  let sc = "";
+  if (mode === "animals") {
+    const a = ANIMALS.find(x => x.id === sel.animal), b = ANIMAL_BEH.find(x => x.id === sel.beh);
+    sc = `SCENARIO: ${a?.label} — "${b?.label}" (${b?.desc}). Use Cats & Dogs subject detection; fallback C-AF+Tracking via AF-ON.`;
+  } else if (mode === "birds") {
+    const bt = BIRDS.find(x => x.id === sel.bird), bs = BIRD_SC.find(x => x.id === sel.birdSc);
+    sc = `SCENARIO: ${bt?.label} — "${bs?.label}" (${bs?.desc}) [${bs?.d}]. Use Bird subject detection.`;
+  } else if (mode === "landscape") {
+    const lt = LANDS.find(x => x.id === sel.land);
+    sc = `SCENARIO: Landscape — ${lt?.label}: ${lt?.desc}. Factor live weather heavily.`;
+  } else if (mode === "macro") {
+    const mc = MACRO_SC.find(x => x.id === sel.macro);
+    sc = `SCENARIO: Macro — ${mc?.label}: ${mc?.desc}. Focus stacking likely relevant.`;
+  } else if (mode === "portrait") {
+    const pt = PORTRAIT_SC.find(x => x.id === sel.portrait);
+    sc = `SCENARIO: Portrait — ${pt?.label}: ${pt?.desc}. Subject detection: Cats & Dogs for cats, Human for people.`;
+  } else if (mode === "night") {
+    const nt = NIGHT_SC.find(x => x.id === sel.night);
+    sc = `SCENARIO: Night — ${nt?.label}: ${nt?.desc}. Consider Starry Sky AF, Live Composite, Live Time if relevant.`;
+  }
+
+  return `${KB_OM}
+
+${ws}
+${sc}
+${ls}
+${extra ? `USER NOTES: ${extra}` : ""}
+
+Respond ONLY with this compact JSON (no markdown, no preamble):
+{
+  "preset_name": "Short evocative name",
+  "shooting_mode": "A/S/M + one-line reason",
+  "recommended_lens": "lens name (only if auto-picking, else restate mounted)",
+  "would_swap": "better lens name or null",
+  "swap_reason": "one-line why or null",
+  "aperture": "f/X.X",
+  "shutter_speed": "1/Xs or Xs",
+  "iso": "value",
+  "drive_mode": "mode + fps",
+  "af_summary": "Subject detection + C-AF area + one-line fallback",
+  "is_mode": "S-IS Auto / S-IS 1 / S-IS 2 + one-line reason",
+  "special_feature": "Pro Capture / Live Comp / Starry Sky AF / Focus Stack / null",
+  "key_buttons": ["2-3 button assignments that matter most for THIS shot, e.g. 'AF-ON: C-AF+Tracking fallback', 'Lens Fn: Subject Detect toggle'"],
+  "why": "2-3 sentence plain-English explanation tying scenario, lens, and conditions together",
+  "tips": ["tip 1", "tip 2", "tip 3"],
+  "setup_steps": ["step 1", "step 2", "step 3", "step 4"]
+}
+
+Be SPECIFIC. Use real OM-1 II menu terminology. Trim the fat.`;
+}
+
+function buildDJIPrompt(mode, sel, weather, extra) {
+  const w = parseW(weather);
+  const t = weather ? Math.round(weather.temperature) : null;
+  const wind = weather ? Math.round(weather.windspeed) : null;
+  const isN = weather?.is_day === 0;
+  const ws = weather
+    ? `CONDITIONS: ${w.label}, ${t}°C, wind ${wind}km/h. ${isN ? "Night." : "Day."}`
+    : "CONDITIONS: assume UK overcast.";
+
+  const m = DJI_MODES.find(x => x.id === sel.djiMode);
+  const o = DJI_OUTPUT.find(x => x.id === sel.djiOutput);
+  const c = DJI_COMPLEXITY.find(x => x.id === sel.djiComplexity);
+  const isVid = sel.djiOutput?.startsWith("video");
+
+  const sc = `SCENARIO: ${m?.label} (${m?.sub}).
+OUTPUT: ${o?.label}.
+APPROACH: ${c?.label} — ${c?.desc}.`;
+
+  return `${KB_DJI}
+
+${ws}
+${sc}
+${extra ? `USER NOTES: ${extra}` : ""}
+
+User is James — experienced photographer, newer to drone. Don't assume manual expertise; suggest auto-modes liberally. Mention manual settings only when the approach is "try something".
+
+Respond ONLY with this compact JSON (no markdown):
+{
+  "preset_name": "Short evocative name",
+  "capture_mode": "${isVid ? "4K/30 / 4K/60 / 1080p / etc" : "Auto / Pro"}",
+  "aperture": "f/1.7 (fixed)",
+  "shutter_speed": "1/X s${isVid ? " (180° rule applied)" : ""}",
+  "iso": "value or 'Auto'",
+  "white_balance": "Auto / Sunny / Cloudy / Kelvin value",
+  "colour_profile": "Normal / D-Log M",
+  "nd_filter": "None / ND8 / ND16 / ND32 / ND64 + reason",
+  ${isVid ? `"video_recording": "Normal / Slow Motion / Hyperlapse",` : `"photo_style": "Single / AEB / Pano type",`}
+  "focus_or_flight": "Focus mode OR flight technique — e.g. 'ActiveTrack on subject' / 'Orbit, 20m radius'",
+  "why": "2-3 sentence plain-English explanation",
+  "tips": ["tip 1", "tip 2", "tip 3"],
+  "flight_checklist": ["check 1", "check 2", "check 3"]
+}
+
+Keep it simple. No unnecessary manual faff.`;
+}
+
+/* ─── RESULT PIECES ─── */
+function SpecChip({ label, value, accent }) {
+  return (
+    <div style={{
+      ...glass("lite"),
+      padding: "10px 12px", borderRadius: 10,
+      textAlign: "center", flex: "1 1 0", minWidth: 0,
+    }}>
+      <div style={{
+        fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em",
+        color: T.textDim, fontFamily: "'JetBrains Mono', monospace", marginBottom: 5,
+      }}>{label}</div>
+      <div style={{
+        fontSize: 15, fontWeight: 700,
+        color: accent || T.text,
+        fontFamily: "'JetBrains Mono', monospace",
+        lineHeight: 1.15, wordBreak: "break-word",
+      }}>{value || "—"}</div>
+    </div>
+  );
+}
+
+function Section({ title, icon, accent, children, style = {} }) {
+  return (
+    <div style={{ ...glass(), padding: 16, marginBottom: 10, ...style }}>
+      <div style={{
+        fontSize: 10, textTransform: "uppercase", letterSpacing: "0.14em",
+        color: accent || T.goldDim, fontFamily: "'JetBrains Mono', monospace",
+        marginBottom: 10, display: "flex", alignItems: "center", gap: 7, fontWeight: 500,
+      }}>
+        {icon && <span style={{ fontSize: 13 }}>{icon}</span>}
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function OMResult({ result }) {
+  if (!result) return null;
+  return (
+    <div>
+      {/* HERO PRESET */}
+      <GlassCard variant="bri" style={{
+        padding: "20px 20px",
+        background: `linear-gradient(135deg, ${T.gold}12, ${T.amber}06)`,
+        borderColor: T.strokeHi,
+      }}>
+        <div style={{
+          fontSize: 9, textTransform: "uppercase", letterSpacing: "0.14em",
+          color: T.goldDim, fontFamily: "'JetBrains Mono', monospace", marginBottom: 4,
+        }}>Preset</div>
+        <div style={{
+          fontSize: 26, fontWeight: 600, color: T.text,
+          fontFamily: "'Fraunces', serif", letterSpacing: "-0.02em",
+          lineHeight: 1.1, marginBottom: 6,
+        }}>{result.preset_name}</div>
+        <div style={{ fontSize: 12, color: T.textMid }}>
+          Mode: <span style={{ color: T.gold, fontFamily: "'JetBrains Mono', monospace" }}>{result.shooting_mode}</span>
+        </div>
+      </GlassCard>
+
+      <div style={{ height: 10 }} />
+
+      {/* LENS */}
+      <Section title="Lens" icon="🔭" accent={T.gold}>
+        <div style={{
+          fontSize: 14, fontWeight: 600, color: T.text,
+          fontFamily: "'JetBrains Mono', monospace", marginBottom: 4,
+        }}>{result.recommended_lens}</div>
+        {result.would_swap && result.would_swap !== "null" && (
+          <div style={{
+            ...glass("lite"),
+            marginTop: 10, padding: "10px 12px", borderRadius: 8,
+            background: `${T.blu}10`, borderColor: `${T.blu}25`,
+          }}>
+            <div style={{
+              fontSize: 10, color: T.blu, fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: 600, marginBottom: 3, letterSpacing: "0.08em",
+            }}>🔄 CONSIDER SWAPPING</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{result.would_swap}</div>
+            {result.swap_reason && result.swap_reason !== "null" && (
+              <div style={{ fontSize: 11, color: T.textMid, marginTop: 3 }}>{result.swap_reason}</div>
+            )}
+          </div>
+        )}
+      </Section>
+
+      {/* EXPOSURE TRIANGLE */}
+      <Section title="Exposure">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <SpecChip label="Aperture" value={result.aperture} accent={T.gold} />
+          <SpecChip label="Shutter" value={result.shutter_speed} accent={T.gold} />
+          <SpecChip label="ISO" value={result.iso} accent={T.gold} />
+        </div>
+      </Section>
+
+      {/* DRIVE + AF + IS */}
+      <Section title="Drive & Focus" icon="⚡" accent={T.blu}>
+        <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6 }}>
+          <span style={{ color: T.textDim, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, marginRight: 6 }}>DRIVE</span>
+          <span style={{ color: T.text, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{result.drive_mode}</span>
+        </div>
+        <div style={{ fontSize: 12, color: T.textMid, marginBottom: 6 }}>
+          <span style={{ color: T.textDim, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, marginRight: 6 }}>AF</span>
+          {result.af_summary}
+        </div>
+        <div style={{ fontSize: 12, color: T.textMid }}>
+          <span style={{ color: T.textDim, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, marginRight: 6 }}>IS</span>
+          {result.is_mode}
+        </div>
+      </Section>
+
+      {/* KEY BUTTONS (trimmed) */}
+      {result.key_buttons?.length > 0 && (
+        <Section title="Key Buttons" icon="⌨">
+          {result.key_buttons.map((b, i) => (
+            <div key={i} style={{
+              display: "flex", gap: 10, alignItems: "baseline",
+              padding: "6px 0",
+              borderBottom: i < result.key_buttons.length - 1 ? `1px solid ${T.stroke}` : "none",
+            }}>
+              <span style={{ color: T.gold, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, flexShrink: 0 }}>▸</span>
+              <span style={{ fontSize: 12, lineHeight: 1.5, color: T.textMid }}>{b}</span>
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {/* SPECIAL FEATURE */}
+      {result.special_feature && result.special_feature !== "null" && (
+        <Section title="Special Feature" icon="✦" accent={T.amber}>
+          <div style={{
+            fontSize: 14, fontWeight: 600, color: T.amber,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>{result.special_feature}</div>
+        </Section>
+      )}
+
+      {/* WHY */}
+      <Section title="Why">
+        <p style={{ fontSize: 13, lineHeight: 1.65, margin: 0, color: T.textMid }}>{result.why}</p>
+      </Section>
+
+      {/* TIPS */}
+      {result.tips?.length > 0 && (
+        <Section title="Tips">
+          {result.tips.map((t, i) => (
+            <div key={i} style={{
+              display: "flex", gap: 10, alignItems: "baseline",
+              marginBottom: i < result.tips.length - 1 ? 8 : 0,
+            }}>
+              <span style={{ color: T.gold, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, flexShrink: 0 }}>→</span>
+              <span style={{ fontSize: 12, lineHeight: 1.55, color: T.textMid }}>{t}</span>
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {/* SETUP STEPS */}
+      {result.setup_steps?.length > 0 && (
+        <CollapsibleSteps steps={result.setup_steps} />
+      )}
+    </div>
+  );
+}
+
+function CollapsibleSteps({ steps }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button onClick={() => setOpen(!open)} style={{
+        width: "100%", padding: "14px 16px",
+        ...glass(open ? "bri" : "base"),
+        border: `1px solid ${open ? T.strokeAct : T.stroke}`,
+        borderRadius: open ? "12px 12px 0 0" : 12,
+        cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        fontFamily: "'Inter', sans-serif",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 13 }}>💾</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.gold }}>Programme this Custom Mode</span>
+        </div>
+        <span style={{
+          color: T.textDim, fontSize: 14, transition: "transform .2s",
+          transform: open ? "rotate(180deg)" : "none",
+        }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          ...glass("bri"),
+          padding: 16, borderTop: "none",
+          borderRadius: "0 0 12px 12px",
+          animation: "fadeUp .3s ease",
+        }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{
+              display: "flex", gap: 10,
+              marginBottom: i < steps.length - 1 ? 10 : 0,
+            }}>
+              <span style={{
+                fontSize: 10, fontWeight: 700, color: T.gold,
+                fontFamily: "'JetBrains Mono', monospace", flexShrink: 0, marginTop: 2,
+              }}>{String(i + 1).padStart(2, "0")}</span>
+              <span style={{ fontSize: 12, lineHeight: 1.55, color: T.textMid }}>
+                {s.replace(/^Step \d+:\s*/, "")}
+              </span>
+            </div>
+          ))}
+          <div style={{
+            marginTop: 12, padding: "10px 12px",
+            background: `${T.wrn}10`, borderRadius: 8,
+            border: `1px solid ${T.wrn}25`,
+            fontSize: 10, color: T.wrn, lineHeight: 1.5,
+          }}>
+            Set <strong>Save Settings</strong> to <strong>Reset</strong> when done. Verify by rotating the mode dial away and back.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DJIResult({ result, isVideo }) {
+  if (!result) return null;
+  return (
+    <div>
+      {/* HERO PRESET */}
+      <GlassCard variant="bri" style={{
+        padding: "20px 20px",
+        background: `linear-gradient(135deg, ${T.blu}12, ${T.violet}06)`,
+        borderColor: T.strokeHi,
+      }}>
+        <div style={{
+          fontSize: 9, textTransform: "uppercase", letterSpacing: "0.14em",
+          color: T.blu, fontFamily: "'JetBrains Mono', monospace", marginBottom: 4,
+        }}>Drone Preset</div>
+        <div style={{
+          fontSize: 26, fontWeight: 600, color: T.text,
+          fontFamily: "'Fraunces', serif", letterSpacing: "-0.02em",
+          lineHeight: 1.1, marginBottom: 6,
+        }}>{result.preset_name}</div>
+        <div style={{ fontSize: 12, color: T.textMid }}>
+          Mode: <span style={{ color: T.blu, fontFamily: "'JetBrains Mono', monospace" }}>{result.capture_mode}</span>
+        </div>
+      </GlassCard>
+
+      <div style={{ height: 10 }} />
+
+      {/* EXPOSURE TRIANGLE */}
+      <Section title="Exposure">
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <SpecChip label="Aperture" value={result.aperture} accent={T.blu} />
+          <SpecChip label="Shutter" value={result.shutter_speed} accent={T.blu} />
+          <SpecChip label="ISO" value={result.iso} accent={T.blu} />
+        </div>
+      </Section>
+
+      {/* COLOUR + WB */}
+      <Section title="Colour & White Balance" icon="🎨" accent={T.violet}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <SpecChip label="WB" value={result.white_balance} />
+          <SpecChip label="Profile" value={result.colour_profile} />
+        </div>
+      </Section>
+
+      {/* ND FILTER */}
+      {result.nd_filter && (
+        <Section title="ND Filter" icon="⬛">
+          <div style={{ fontSize: 13, color: T.text, fontWeight: 600, marginBottom: 3 }}>{result.nd_filter}</div>
+        </Section>
+      )}
+
+      {/* PHOTO STYLE OR VIDEO RECORDING */}
+      {isVideo && result.video_recording && (
+        <Section title="Recording Mode" icon="🎬">
+          <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{result.video_recording}</div>
+        </Section>
+      )}
+      {!isVideo && result.photo_style && (
+        <Section title="Photo Style" icon="📸">
+          <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{result.photo_style}</div>
+        </Section>
+      )}
+
+      {/* FOCUS / FLIGHT */}
+      {result.focus_or_flight && (
+        <Section title="Focus / Flight Technique" icon="🎯" accent={T.blu}>
+          <div style={{ fontSize: 13, color: T.text, lineHeight: 1.55 }}>{result.focus_or_flight}</div>
+        </Section>
+      )}
+
+      {/* WHY */}
+      <Section title="Why">
+        <p style={{ fontSize: 13, lineHeight: 1.65, margin: 0, color: T.textMid }}>{result.why}</p>
+      </Section>
+
+      {/* TIPS */}
+      {result.tips?.length > 0 && (
+        <Section title="Tips">
+          {result.tips.map((t, i) => (
+            <div key={i} style={{
+              display: "flex", gap: 10, alignItems: "baseline",
+              marginBottom: i < result.tips.length - 1 ? 8 : 0,
+            }}>
+              <span style={{ color: T.blu, fontFamily: "'JetBrains Mono', monospace", fontSize: 10, flexShrink: 0 }}>→</span>
+              <span style={{ fontSize: 12, lineHeight: 1.55, color: T.textMid }}>{t}</span>
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {/* CHECKLIST */}
+      {result.flight_checklist?.length > 0 && (
+        <Section title="Pre-flight Checklist" icon="✓" accent={T.grn}>
+          {result.flight_checklist.map((c, i) => (
+            <div key={i} style={{
+              display: "flex", gap: 10, alignItems: "baseline",
+              marginBottom: i < result.flight_checklist.length - 1 ? 8 : 0,
+            }}>
+              <span style={{
+                display: "inline-block", width: 14, height: 14, borderRadius: 3,
+                border: `1.5px solid ${T.grn}`, flexShrink: 0, marginTop: 2,
+              }} />
+              <span style={{ fontSize: 12, lineHeight: 1.55, color: T.textMid }}>{c}</span>
+            </div>
+          ))}
+        </Section>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════ MAIN APP ═══════════ */
+export default function App() {
+  // Kit & UI state
+  const [kit, setKit] = usePersistedKit();
+  const [showKit, setShowKit] = useState(false);
+  const [device, setDevice] = useState("om1");
+
+  // OM-1 state
+  const [mounted, setMounted] = useState(null);
+  const [tc, setTc] = useState("none");
+  const [omMode, setOmMode] = useState(null);
+  const [animal, setAnimal] = useState("");
+  const [beh, setBeh] = useState("");
+  const [bird, setBird] = useState("");
+  const [birdSc, setBirdSc] = useState("");
+  const [land, setLand] = useState("");
+  const [macro, setMacro] = useState("");
+  const [portrait, setPortrait] = useState("");
+  const [night, setNight] = useState("");
+
+  // DJI state
+  const [djiMode, setDjiMode] = useState(null);
+  const [djiOutput, setDjiOutput] = useState("");
+  const [djiComplexity, setDjiComplexity] = useState("easy");
+
+  // Shared
+  const [extra, setExtra] = useState("");
+  const [weather, setWeather] = useState(null);
+  const [forecast, setForecast] = useState(null);
+  const [weatherLive, setWeatherLive] = useState(false);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+  const resultRef = useRef(null);
+
+  // Fetch weather
+  useEffect(() => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     fetch("https://api.open-meteo.com/v1/forecast?latitude=53.41&longitude=-2.16&current_weather=true&hourly=weathercode,temperature_2m,windspeed_10m,cloudcover,precipitation_probability,is_day&forecast_days=1&timezone=Europe/London", { signal: controller.signal })
-      .then(r=>{if(!r.ok)throw new Error(r.status);return r.json();})
-      .then(d=>{setW(d.current_weather);setForecast(d.hourly||null);setWeatherLive(true);})
-      .catch(()=>{/* weather unavailable — dashboard shows loading state */})
-      .finally(()=>clearTimeout(timeout));
-    return ()=>{controller.abort();clearTimeout(timeout);};
-  },[]);
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(d => { setWeather(d.current_weather); setForecast(d.hourly || null); setWeatherLive(true); })
+      .catch(() => {})
+      .finally(() => clearTimeout(timeout));
+    return () => { controller.abort(); clearTimeout(timeout); };
+  }, []);
 
-  const wi=parseW(weather);const isN=weather?.is_day===0;const tc=weather?Math.round(weather.temperature):null;
-  function reset(){setMode(null);setAnimal("");setBeh("");setBird("");setBirdSc("");setLand("");setExtra("");setR(null);setErr(null);setShowS(false);setMt(null);setBag([]);}
-  function canGo(){if(loading||!kit.length)return false;if(mode==="animals")return animal&&beh;if(mode==="birds")return bird&&birdSc;if(mode==="landscape")return!!land;return false;}
-
-  async function go(){
-    setL(true);setErr(null);setR(null);setShowS(false);
-    const sel={animal,beh,bird,birdSc,land};
-    const avail=mt?[mt,...bag]:kit;
-    const p=buildPrompt(mode,sel,weather,extra,avail,mt);
-    try{
-      const res=await fetch("/api/settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:p})});
-      if(!res.ok)throw new Error(res.status);
-      const d=await res.json();const txt=d.text||"";
-      setR(JSON.parse(txt.replace(/```json\s*/g,"").replace(/```\s*/g,"").trim()));
-    }catch(e){console.error(e);setErr("Something went wrong — try again.");}
-    finally{setL(false);}
+  function resetScenario() {
+    setResult(null); setErr(null);
+    setAnimal(""); setBeh(""); setBird(""); setBirdSc("");
+    setLand(""); setMacro(""); setPortrait(""); setNight("");
+    setDjiOutput("");
   }
 
-  useEffect(()=>{if(result&&rr.current)rr.current.scrollIntoView({behavior:"smooth",block:"start"});},[result]);
+  function handleDeviceChange(d) {
+    setDevice(d);
+    setOmMode(null); setDjiMode(null);
+    resetScenario();
+  }
 
-  return(
-    <div style={{minHeight:"100vh",background:C.bg,color:C.txt,fontFamily:"'Outfit',sans-serif"}}>
+  function canGo() {
+    if (loading || !kit.length) return false;
+    if (device === "om1") {
+      if (!omMode) return false;
+      if (omMode === "animals") return animal && beh;
+      if (omMode === "birds") return bird && birdSc;
+      if (omMode === "landscape") return !!land;
+      if (omMode === "macro") return !!macro;
+      if (omMode === "portrait") return !!portrait;
+      if (omMode === "night") return !!night;
+    } else {
+      return djiMode && djiOutput && djiComplexity;
+    }
+    return false;
+  }
+
+  async function go() {
+    setLoading(true); setErr(null); setResult(null);
+    let prompt;
+    if (device === "om1") {
+      const sel = { animal, beh, bird, birdSc, land, macro, portrait, night };
+      prompt = buildOMPrompt(omMode, sel, weather, extra, kit, mounted, tc);
+    } else {
+      const sel = { djiMode, djiOutput, djiComplexity };
+      prompt = buildDJIPrompt(djiMode, sel, weather, extra);
+    }
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      if (!res.ok) throw new Error(res.status);
+      const d = await res.json();
+      const txt = d.text || "";
+      const clean = txt.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      setResult(JSON.parse(clean));
+    } catch (e) {
+      console.error(e);
+      setErr("Something went wrong — try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (result && resultRef.current) {
+      resultRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [result]);
+
+  const wi = parseW(weather);
+  const isN = weather?.is_day === 0;
+  const tc_short = (() => { const o = TC_OPTIONS.find(x => x.id === tc); return o?.short || ""; })();
+  const isDJIVideo = djiOutput?.startsWith("video");
+
+  return (
+    <div style={{
+      minHeight: "100vh", position: "relative",
+      color: T.text, fontFamily: "'Inter', sans-serif",
+    }}>
       <link href={FONTS} rel="stylesheet"/>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}::selection{background:${C.gold}30}*{box-sizing:border-box}input::placeholder{color:${C.tM}}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:${C.bdr};border-radius:4px}`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.5 } }
+        ::selection { background: ${T.gold}40; color: ${T.text} }
+        * { box-sizing: border-box }
+        body { margin: 0; background: ${T.bg}; color: ${T.text}; }
+        input::placeholder { color: ${T.textFaint} }
+        ::-webkit-scrollbar { width: 6px; height: 6px }
+        ::-webkit-scrollbar-track { background: transparent }
+        ::-webkit-scrollbar-thumb { background: ${T.stroke}; border-radius: 4px }
+        ::-webkit-scrollbar-thumb:hover { background: ${T.strokeHi} }
+        button { font-family: inherit }
+      `}</style>
 
-      {showKit&&<KitPanel kit={kit} setKit={setKit} onClose={()=>setShowKit(false)}/>}
+      <AtmoBg />
+
+      {showKit && <KitPanel kit={kit} setKit={setKit} onClose={() => setShowKit(false)}/>}
 
       {/* HEADER */}
-      <header style={{padding:"22px 20px 18px",borderBottom:`1px solid ${C.bdr}`,background:"linear-gradient(180deg,rgba(200,185,160,0.03),transparent)"}}>
-        <div style={{maxWidth:600,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${C.gB},${C.gD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:C.bg,fontWeight:700}}>◎</div>
-            <div><div style={{fontSize:15,fontWeight:700,color:C.gB}}>OM Settings Advisor</div><div style={{fontSize:9,color:C.tD,fontFamily:"'JetBrains Mono',monospace",letterSpacing:"0.08em",textTransform:"uppercase"}}>OM-1 Mark II</div></div>
+      <header style={{
+        position: "relative", zIndex: 10,
+        padding: "22px 20px 16px",
+        borderBottom: `1px solid ${T.stroke}`,
+        background: "linear-gradient(180deg, rgba(232, 208, 160, 0.03), transparent)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+      }}>
+        <div style={{
+          maxWidth: 620, margin: "0 auto",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%",
+              background: `radial-gradient(circle at 30% 30%, ${T.gold}, ${T.goldDim} 70%, ${T.bgWarm} 100%)`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, color: T.bgWarm, fontWeight: 700,
+              boxShadow: `0 2px 12px ${T.gold}20`,
+            }}>◎</div>
+            <div>
+              <div style={{
+                fontSize: 17, fontWeight: 600, color: T.text,
+                fontFamily: "'Fraunces', serif", letterSpacing: "-0.01em",
+              }}>Settings Advisor</div>
+              <div style={{
+                fontSize: 9, color: T.textDim,
+                fontFamily: "'JetBrains Mono', monospace",
+                letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 1,
+              }}>v2 · Dark Glass</div>
+            </div>
           </div>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            {weather&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 10px",background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:14}}><span style={{fontSize:11}}>{isN?"🌙":wi.icon}</span><span style={{fontSize:10,color:C.tD,fontFamily:"'JetBrains Mono',monospace"}}>{tc}°</span></div>}
-            <button onClick={()=>setShowKit(true)} style={{padding:"4px 10px",cursor:"pointer",background:!kit.length?`${C.acc}15`:C.srf,border:`1px solid ${!kit.length?`${C.acc}40`:C.bdr}`,borderRadius:14,display:"flex",alignItems:"center",gap:4,fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:!kit.length?C.acc:C.tD,animation:!kit.length?"pulse 2s ease infinite":"none"}}><span style={{fontSize:11}}>📷</span>{!kit.length?"Add lenses":`${kit.length} lens${kit.length!==1?"es":""}`}</button>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {weather && (
+              <div style={{
+                ...glass("lite"),
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "5px 11px", borderRadius: 14,
+              }}>
+                <span style={{ fontSize: 11 }}>{isN ? "🌙" : wi.icon}</span>
+                <span style={{ fontSize: 10, color: T.textMid, fontFamily: "'JetBrains Mono', monospace" }}>
+                  {weather ? Math.round(weather.temperature) : "—"}°
+                </span>
+              </div>
+            )}
+            <button onClick={() => setShowKit(true)} style={{
+              ...glass(!kit.length ? "bri" : "lite"),
+              padding: "5px 11px", cursor: "pointer",
+              borderRadius: 14,
+              display: "flex", alignItems: "center", gap: 5,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, color: !kit.length ? T.amber : T.textMid,
+              border: `1px solid ${!kit.length ? T.strokeAct : T.stroke}`,
+              animation: !kit.length ? "pulse 2s ease infinite" : "none",
+            }}>
+              <span style={{ fontSize: 11 }}>📷</span>
+              {!kit.length ? "Add lenses" : `${kit.length} lens${kit.length !== 1 ? "es" : ""}`}
+            </button>
           </div>
         </div>
       </header>
 
-      <main style={{maxWidth:600,margin:"0 auto",padding:"0 20px 60px"}}>
+      <main style={{
+        position: "relative", zIndex: 1,
+        maxWidth: 620, margin: "0 auto", padding: "18px 20px 60px",
+      }}>
 
-        {!kit.length&&<div style={{textAlign:"center",padding:"48px 20px"}}><div style={{fontSize:36,marginBottom:12}}>📷</div><div style={{fontSize:16,fontWeight:600,color:C.gB,marginBottom:6}}>Set up your lens kit</div><div style={{fontSize:13,color:C.tD,lineHeight:1.5,maxWidth:320,margin:"0 auto 20px"}}>Add your lenses so recommendations match your actual glass.</div><button onClick={()=>setShowKit(true)} style={{padding:"12px 28px",border:"none",borderRadius:10,background:`linear-gradient(135deg,${C.gB},${C.gold})`,color:C.bg,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Add My Lenses</button></div>}
+        {!kit.length && (
+          <div style={{ textAlign: "center", padding: "60px 20px" }}>
+            <div style={{ fontSize: 44, marginBottom: 14, opacity: 0.5 }}>📷</div>
+            <div style={{
+              fontSize: 18, fontWeight: 600, color: T.text, marginBottom: 8,
+              fontFamily: "'Fraunces', serif", letterSpacing: "-0.01em",
+            }}>Set up your lens kit</div>
+            <div style={{
+              fontSize: 13, color: T.textMid, lineHeight: 1.6,
+              maxWidth: 320, margin: "0 auto 24px",
+            }}>Tell me what glass you have. Recommendations will be tailored to your actual kit.</div>
+            <button onClick={() => setShowKit(true)} style={{
+              padding: "13px 32px", border: "none", borderRadius: 10,
+              background: `linear-gradient(135deg, ${T.gold}, ${T.amber})`,
+              color: T.bgWarm, fontSize: 14, fontWeight: 700,
+              cursor: "pointer", fontFamily: "'Inter', sans-serif",
+              boxShadow: `0 4px 20px ${T.gold}30`,
+            }}>Add My Lenses</button>
+          </div>
+        )}
 
-        {!!kit.length&&<>
-          {/* CONDITIONS DASHBOARD - always visible */}
-          <ConditionsDash weather={weather} forecast={forecast} weatherLive={weatherLive} />
+        {!!kit.length && (
+          <>
+            {/* TOP DEVICE TABS */}
+            <TopTabs active={device} onChange={handleDeviceChange} />
 
-          {/* MODE */}
-          <SL>What are you shooting?</SL>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-            {[{id:"animals",icon:"🐾",label:"Animals",sub:"Cat Snaps & more"},{id:"birds",icon:"🦅",label:"Birds",sub:"Tweet Settings"},{id:"landscape",icon:"🏔️",label:"Landscape",sub:"Weather-aware"}].map(m=>(
-              <button key={m.id} onClick={()=>{setMode(m.id);setAnimal("");setBeh("");setBird("");setBirdSc("");setLand("");setR(null);setErr(null);setShowS(false);setMt(null);setBag([]);}} style={{padding:"16px 10px",cursor:"pointer",textAlign:"center",background:mode===m.id?"rgba(200,185,160,0.08)":C.srf,border:`${mode===m.id?"1.5px":"1px"} solid ${mode===m.id?C.bdrA:C.bdr}`,borderRadius:12,fontFamily:"'Outfit',sans-serif"}}>
-                <div style={{fontSize:24,marginBottom:4}}>{m.icon}</div>
-                <div style={{fontSize:13,fontWeight:700,color:mode===m.id?C.gB:"#aaa"}}>{m.label}</div>
-                <div style={{fontSize:10,color:C.tM,marginTop:2}}>{m.sub}</div>
-              </button>
+            {/* CONDITIONS DASHBOARD */}
+            <ConditionsDash weather={weather} forecast={forecast} weatherLive={weatherLive} />
+
+            {/* DEVICE CONTENT */}
+            {device === "om1" ? (
+              <OMFlow
+                kit={kit}
+                mounted={mounted} setMounted={setMounted}
+                tc={tc} setTc={setTc}
+                omMode={omMode} setOmMode={(m) => { setOmMode(m); resetScenario(); }}
+                animal={animal} setAnimal={setAnimal}
+                beh={beh} setBeh={setBeh}
+                bird={bird} setBird={setBird}
+                birdSc={birdSc} setBirdSc={setBirdSc}
+                land={land} setLand={setLand}
+                macro={macro} setMacro={setMacro}
+                portrait={portrait} setPortrait={setPortrait}
+                night={night} setNight={setNight}
+              />
+            ) : (
+              <DJIFlow
+                djiMode={djiMode} setDjiMode={(m) => { setDjiMode(m); resetScenario(); }}
+                djiOutput={djiOutput} setDjiOutput={setDjiOutput}
+                djiComplexity={djiComplexity} setDjiComplexity={setDjiComplexity}
+              />
+            )}
+
+            {/* EXTRA NOTES + GO BUTTON */}
+            {((device === "om1" && omMode) || (device === "dji" && djiMode)) && (
+              <>
+                <Label>Anything else <span style={{ color: T.textFaint, textTransform: "none", letterSpacing: 0 }}>(optional)</span></Label>
+                <input
+                  value={extra} onChange={e => setExtra(e.target.value)}
+                  placeholder="e.g. 'handheld', 'through glass', 'want bokeh'…"
+                  style={{
+                    width: "100%", padding: "12px 14px",
+                    ...glass("lite"),
+                    color: T.text, fontSize: 13,
+                    fontFamily: "'Inter', sans-serif", outline: "none",
+                    borderRadius: 10,
+                  }}
+                />
+
+                <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+                  <button onClick={() => { resetScenario(); setOmMode(null); setDjiMode(null); setMounted(null); setTc("none"); setExtra(""); }} style={{
+                    padding: "13px 20px",
+                    ...glass("base"),
+                    borderRadius: 11, color: T.textMid,
+                    fontSize: 12, fontFamily: "'Inter', sans-serif",
+                    fontWeight: 500, cursor: "pointer",
+                  }}>Reset</button>
+                  <button onClick={go} disabled={!canGo()} style={{
+                    flex: 1, padding: "13px", border: "none", borderRadius: 11,
+                    background: canGo()
+                      ? `linear-gradient(135deg, ${T.gold}, ${T.amber})`
+                      : "rgba(255, 255, 255, 0.04)",
+                    color: canGo() ? T.bgWarm : T.textFaint,
+                    fontSize: 14, fontWeight: 700,
+                    fontFamily: "'Inter', sans-serif",
+                    cursor: canGo() ? "pointer" : "not-allowed",
+                    boxShadow: canGo() ? `0 4px 20px ${T.gold}25` : "none",
+                    transition: "all .2s",
+                  }}>
+                    {loading ? "Working it out…" : "Get Settings"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* LOADING */}
+            {loading && (
+              <div style={{ textAlign: "center", padding: "36px 0", color: T.textDim }}>
+                <div style={{
+                  width: 26, height: 26,
+                  border: `2px solid ${T.stroke}`, borderTop: `2px solid ${T.gold}`,
+                  borderRadius: "50%", margin: "0 auto 12px",
+                  animation: "spin .8s linear infinite",
+                }}/>
+                <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+                  Dialling in your shot…
+                </div>
+              </div>
+            )}
+
+            {/* ERROR */}
+            {err && (
+              <GlassCard style={{
+                marginTop: 14, background: `${T.red}12`,
+                borderColor: `${T.red}35`, color: T.red, fontSize: 12,
+              }}>{err}</GlassCard>
+            )}
+
+            {/* RESULT */}
+            {result && (
+              <div ref={resultRef} style={{ marginTop: 28, animation: "fadeUp .4s ease" }}>
+                <div style={{
+                  height: 1, marginBottom: 18,
+                  background: `linear-gradient(90deg, transparent, ${T.gold}30, transparent)`,
+                }} />
+                {device === "om1"
+                  ? <OMResult result={result} />
+                  : <DJIResult result={result} isVideo={isDJIVideo} />}
+                <div style={{ textAlign: "center", marginTop: 20 }}>
+                  <button onClick={() => { setResult(null); setErr(null); }} style={{
+                    ...glass("lite"),
+                    padding: "10px 24px", borderRadius: 10,
+                    color: T.textDim, fontSize: 12, cursor: "pointer",
+                    fontFamily: "'Inter', sans-serif",
+                  }}>Dismiss result</button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/* ─── OM-1 FLOW ─── */
+function OMFlow(props) {
+  const {
+    kit, mounted, setMounted, tc, setTc,
+    omMode, setOmMode,
+    animal, setAnimal, beh, setBeh,
+    bird, setBird, birdSc, setBirdSc,
+    land, setLand,
+    macro, setMacro,
+    portrait, setPortrait,
+    night, setNight,
+  } = props;
+
+  return (
+    <>
+      <Label accent={T.gold}>What are you shooting?</Label>
+      <ModeScroller modes={OM_MODES} selected={omMode} onSelect={setOmMode} />
+
+      {/* ANIMALS */}
+      {omMode === "animals" && (
+        <>
+          <Label>Pick your subject</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {ANIMALS.map(a => (
+              <SelCard key={a.id} sel={animal === a.id} onClick={() => { setAnimal(a.id); setBeh(""); }} icon={a.icon} label={a.label} tag={a.tag}/>
+            ))}
+          </div>
+          {animal && (
+            <>
+              <Label>What's it doing?</Label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {ANIMAL_BEH.map(b => (
+                  <SelCard key={b.id} sel={beh === b.id} onClick={() => setBeh(b.id)} label={b.label} tag={b.desc}/>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* BIRDS */}
+      {omMode === "birds" && (
+        <>
+          <Label>What kind of bird?</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {BIRDS.map(b => (
+              <SelCard key={b.id} sel={bird === b.id} onClick={() => { setBird(b.id); setBirdSc(""); }} icon={b.icon} label={b.label} tag={b.tag}/>
+            ))}
+          </div>
+          {bird && (
+            <>
+              <Label>What's it going to do?</Label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {BIRD_SC.map(s => (
+                  <SelCard key={s.id} sel={birdSc === s.id} onClick={() => setBirdSc(s.id)} label={s.label} tag={s.desc} difficulty={s.d}/>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* LANDSCAPE */}
+      {omMode === "landscape" && (
+        <>
+          <Label>What kind of scene?</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {LANDS.map(l => (
+              <SelCard key={l.id} sel={land === l.id} onClick={() => setLand(l.id)} icon={l.icon} label={l.label} tag={l.desc}/>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* MACRO */}
+      {omMode === "macro" && (
+        <>
+          <Label>Macro what?</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {MACRO_SC.map(m => (
+              <SelCard key={m.id} sel={macro === m.id} onClick={() => setMacro(m.id)} label={m.label} tag={m.desc}/>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* PORTRAIT */}
+      {omMode === "portrait" && (
+        <>
+          <Label>Portrait of?</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {PORTRAIT_SC.map(p => (
+              <SelCard key={p.id} sel={portrait === p.id} onClick={() => setPortrait(p.id)} label={p.label} tag={p.desc}/>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* NIGHT */}
+      {omMode === "night" && (
+        <>
+          <Label>What kind of night?</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {NIGHT_SC.map(n => (
+              <SelCard key={n.id} sel={night === n.id} onClick={() => setNight(n.id)} label={n.label} tag={n.desc}/>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* LENS TABS */}
+      {omMode && <LensTabs kit={kit} mounted={mounted} setMounted={setMounted} tc={tc} setTc={setTc} />}
+    </>
+  );
+}
+
+/* ─── DJI FLOW ─── */
+function DJIFlow({ djiMode, setDjiMode, djiOutput, setDjiOutput, djiComplexity, setDjiComplexity }) {
+  return (
+    <>
+      <Label accent={T.blu}>What's the shot?</Label>
+      <ModeScroller modes={DJI_MODES} selected={djiMode} onSelect={setDjiMode} />
+
+      {djiMode && (
+        <>
+          <Label>Output type</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {DJI_OUTPUT.map(o => (
+              <SelCard key={o.id} sel={djiOutput === o.id} onClick={() => setDjiOutput(o.id)} icon={o.icon} label={o.label}/>
             ))}
           </div>
 
-          {mode==="animals"&&<><SL>Pick your preset</SL><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>{ANIMALS.map(a=><Card key={a.id} sel={animal===a.id} onClick={()=>{setAnimal(a.id);setBeh("");}} icon={a.icon} label={a.label} tag={a.tag}/>)}</div>{animal&&<><SL>What's it doing?</SL><div style={{display:"flex",flexDirection:"column",gap:6}}>{ANIMAL_BEH.map(b=><Chip key={b.id} sel={beh===b.id} onClick={()=>setBeh(b.id)} label={b.label} desc={b.desc}/>)}</div></>}</>}
-
-          {mode==="birds"&&<><SL>What kind of bird?</SL><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>{BIRDS.map(b=><Card key={b.id} sel={bird===b.id} onClick={()=>{setBird(b.id);setBirdSc("");}} icon={b.icon} label={b.label} tag={b.tag}/>)}</div>{bird&&<><SL>What's it going to do?</SL><div style={{display:"flex",flexDirection:"column",gap:6}}>{BIRD_SC.map(s=><Chip key={s.id} sel={birdSc===s.id} onClick={()=>setBirdSc(s.id)} label={s.label} desc={s.desc} d={s.d}/>)}</div></>}</>}
-
-          {mode==="landscape"&&<><SL>What kind of scene?</SL><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>{LANDS.map(l=><Card key={l.id} sel={land===l.id} onClick={()=>setLand(l.id)} icon={l.icon} label={l.label} tag={l.desc}/>)}</div>{land&&weather&&<><WeatherScene weather={weather}/><div style={{marginTop:8,padding:"10px 14px",background:`${C.gold}08`,border:`1px solid ${C.gold}18`,borderRadius:10,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{isN?"🌙":wi.icon}</span><div><div style={{fontSize:11,color:C.gold,fontFamily:"'JetBrains Mono',monospace"}}>Live weather → lens + settings</div><div style={{fontSize:10,color:C.tD,marginTop:1}}>{wi.label}, {tc}°C</div></div></div></>}</>}
-
-          {mode&&<LensSel kit={kit} mt={mt} setMt={setMt} bag={bag} setBag={setBag}/>}
-
-          {mode&&<>
-            <div style={{marginTop:16}}><SL>Anything else? <span style={{color:C.tM,textTransform:"none",letterSpacing:0}}>(optional)</span></SL><input value={extra} onChange={e=>setExtra(e.target.value)} placeholder="e.g. 'handheld', 'through a window', 'want bokeh'…" style={{width:"100%",padding:"12px 14px",background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:8,color:C.txt,fontSize:13,fontFamily:"'Outfit',sans-serif",outline:"none"}}/></div>
-            <div style={{display:"flex",gap:8,marginTop:18}}>
-              <button onClick={reset} style={{padding:"12px 16px",background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:10,color:C.tD,fontSize:12,fontFamily:"'Outfit',sans-serif",cursor:"pointer"}}>Reset</button>
-              <button onClick={go} disabled={!canGo()} style={{flex:1,padding:"12px",border:"none",borderRadius:10,background:canGo()?`linear-gradient(135deg,${C.gB},${C.gold})`:"rgba(255,255,255,0.04)",color:canGo()?C.bg:C.tM,fontSize:14,fontWeight:700,fontFamily:"'Outfit',sans-serif",cursor:canGo()?"pointer":"not-allowed"}}>{loading?"Working it out…":"Get Settings"}</button>
-            </div>
-          </>}
-
-          {loading&&<div style={{textAlign:"center",padding:"32px 0",color:C.tD}}><div style={{width:24,height:24,border:`2px solid ${C.bdr}`,borderTop:`2px solid ${C.gB}`,borderRadius:"50%",margin:"0 auto 12px",animation:"spin .8s linear infinite"}}/><div style={{fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>Dialling in your shot…</div></div>}
-          {err&&<div style={{marginTop:14,padding:"12px 14px",background:`${C.red}12`,border:`1px solid ${C.red}25`,borderRadius:8,color:C.red,fontSize:12}}>{err}</div>}
-
-          {/* ═══ RESULTS ═══ */}
-          {result&&<div ref={rr} style={{marginTop:24,animation:"fadeUp .4s ease"}}>
-            <div style={{height:1,background:`linear-gradient(90deg,transparent,${C.gold}30,transparent)`,marginBottom:20}}/>
-
-            <div style={{background:`linear-gradient(135deg,${C.gold}0c,${C.gold}04)`,border:`1px solid ${C.gold}20`,borderRadius:12,padding:18,marginBottom:14}}>
-              <div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.12em",color:C.gD,fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>Preset</div>
-              <div style={{fontSize:19,fontWeight:800,color:C.gB,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.2,letterSpacing:"-0.03em"}}>{result.preset_name}</div>
-              <div style={{fontSize:11,color:C.tD,marginTop:4}}>Mode: <span style={{color:C.gold}}>{result.shooting_mode}</span></div>
-            </div>
-
-            <RS title="Lens" icon="🔭" ac={C.gold}>
-              <div style={{fontSize:14,fontWeight:700,color:C.gB,fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{result.recommended_lens}</div>
-              <div style={{fontSize:12,color:C.tD,lineHeight:1.5}}>{result.lens_reason}</div>
-              {result.would_swap&&result.would_swap!=="null"&&<div style={{marginTop:10,padding:"10px 12px",background:`${C.blu}0c`,border:`1px solid ${C.blu}20`,borderRadius:6}}>
-                <div style={{fontSize:10,color:C.blu,fontFamily:"'JetBrains Mono',monospace",fontWeight:600,marginBottom:2}}>🔄 Consider swapping to:</div>
-                <div style={{fontSize:12,fontWeight:700,color:C.txt}}>{result.would_swap}</div>
-                <div style={{fontSize:11,color:C.tD,marginTop:2}}>{result.swap_reason}</div>
-              </div>}
-            </RS>
-
-            <RS title="Exposure">
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6,marginBottom:6}}><SC label="Aperture" value={result.aperture}/><SC label="Shutter" value={result.shutter_speed}/><SC label="ISO" value={result.iso}/></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}><SC label="Metering" value={result.metering}/><SC label="IS Mode" value={result.is_mode}/></div>
-            </RS>
-
-            <RS title="Drive Mode" icon="⚡"><div style={{fontSize:14,fontWeight:700,color:C.gB,fontFamily:"'JetBrains Mono',monospace",marginBottom:4}}>{result.drive_mode}</div><div style={{fontSize:11,color:C.tD,lineHeight:1.5}}>{result.drive_reason}</div></RS>
-
-            <RS title="Autofocus" icon="◎" ac={C.blu}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-                <div style={{background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:12}}><div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.08em",color:C.tD,fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>Lever 1</div><div style={{fontSize:13,fontWeight:700,color:C.gB,fontFamily:"'JetBrains Mono',monospace"}}>{result.lever1_af_mode}</div><div style={{fontSize:11,color:C.gold,marginTop:2}}>{result.lever1_af_target}</div><div style={{fontSize:10,color:C.tD,marginTop:4,lineHeight:1.4}}>{result.lever1_use}</div></div>
-                <div style={{background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:8,padding:12}}><div style={{fontSize:9,textTransform:"uppercase",letterSpacing:"0.08em",color:C.tD,fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>Lever 2</div><div style={{fontSize:13,fontWeight:700,color:C.gB,fontFamily:"'JetBrains Mono',monospace"}}>{result.lever2_af_mode}</div><div style={{fontSize:11,color:C.gold,marginTop:2}}>{result.lever2_af_target}</div><div style={{fontSize:10,color:C.tD,marginTop:4,lineHeight:1.4}}>{result.lever2_use}</div></div>
+          {djiOutput && (
+            <>
+              <Label>Approach</Label>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {DJI_COMPLEXITY.map(c => (
+                  <SelCard key={c.id} sel={djiComplexity === c.id} onClick={() => setDjiComplexity(c.id)} label={c.label} tag={c.desc}/>
+                ))}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}><SC label="Subject Detect" value={result.subject_detection}/><SC label="C-AF Area" value={result.c_af_area}/></div>
-              {(result.af_button_shutter||result.af_button_afon)&&<div style={{marginTop:8,padding:"10px 12px",background:C.srf,borderRadius:6,border:`1px solid ${C.bdr}`}}><div style={{fontSize:9,textTransform:"uppercase",color:C.tD,fontFamily:"'JetBrains Mono',monospace",marginBottom:5}}>AF Button Priority</div><div style={{fontSize:10,color:C.txt,lineHeight:1.6}}><span style={{color:C.gD}}>Shutter ½:</span> {result.af_button_shutter}<br/><span style={{color:C.gD}}>AF-ON:</span> {result.af_button_afon}</div></div>}
-              {result.c_af_sensitivity&&<div style={{fontSize:10,color:C.tD,marginTop:6}}>C-AF Sensitivity: <span style={{color:C.gold}}>{result.c_af_sensitivity}</span></div>}
-            </RS>
-
-            <RS title="Button Map" icon="⌨"><BR label="Exp Comp" value={result.btn_exp_comp} icon="⊞"/><BR label="ISO Btn" value={result.btn_iso} icon="◆"/><BR label="AF-ON" value={result.btn_af_on} icon="AF"/><BR label="AEL" value={result.btn_ael} icon="AE"/><BR label="Arrow →" value={result.btn_arrow_right} icon="▶"/><BR label="Arrow ↓" value={result.btn_arrow_down} icon="▼"/><BR label="Front ⊙" value={result.btn_front_bottom} icon="◉"/><BR label="Front ⊚" value={result.btn_front_top} icon="◎"/><BR label="Lens Fn" value={result.btn_lens_fn} icon="Fn"/><div style={{marginTop:8,padding:"8px 10px",background:C.srf,borderRadius:6,border:`1px solid ${C.bdr}`,fontSize:10,color:C.tD}}><span style={{color:C.gD}}>Dials:</span> {result.dial_config}</div></RS>
-
-            {result.special_feature&&result.special_feature!=="null"&&<RS title="Special Feature" icon="✦" ac={C.acc}><div style={{fontSize:14,fontWeight:700,color:C.acc,fontFamily:"'JetBrains Mono',monospace"}}>{result.special_feature}</div>{result.special_feature_detail&&result.special_feature_detail!=="null"&&<div style={{fontSize:11,color:C.tD,marginTop:4,lineHeight:1.5}}>{result.special_feature_detail}</div>}</RS>}
-
-            <RS title="Why These Settings"><p style={{fontSize:13,lineHeight:1.65,margin:0,color:C.txt}}>{result.why}</p></RS>
-
-            {result.tips?.length>0&&<RS title="Tips">{result.tips.map((t,i)=><div key={i} style={{display:"flex",gap:8,alignItems:"baseline",marginBottom:i<result.tips.length-1?6:0}}><span style={{color:C.gold,fontSize:9,fontFamily:"'JetBrains Mono',monospace",flexShrink:0}}>→</span><span style={{fontSize:12,lineHeight:1.5,color:C.tD}}>{t}</span></div>)}</RS>}
-
-            {result.setup_steps?.length>0&&<div style={{marginBottom:12}}>
-              <button onClick={()=>setShowS(!showS)} style={{width:"100%",padding:"14px 16px",background:C.srf,border:`1px solid ${C.bdr}`,borderRadius:showS?"12px 12px 0 0":"12px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",fontFamily:"'Outfit',sans-serif"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:13}}>💾</span><span style={{fontSize:12,fontWeight:600,color:C.gold}}>Programme this Custom Mode</span></div>
-                <span style={{color:C.tD,fontSize:14,transition:"transform .2s",transform:showS?"rotate(180deg)":"none"}}>▾</span>
-              </button>
-              {showS&&<div style={{padding:16,background:C.srf,border:`1px solid ${C.bdr}`,borderTop:"none",borderRadius:"0 0 12px 12px",animation:"fadeUp .3s ease"}}>
-                {result.setup_steps.map((s,i)=><div key={i} style={{display:"flex",gap:10,marginBottom:i<result.setup_steps.length-1?10:0}}><span style={{fontSize:10,fontWeight:700,color:C.gold,fontFamily:"'JetBrains Mono',monospace",flexShrink:0,marginTop:2}}>{String(i+1).padStart(2,"0")}</span><span style={{fontSize:12,lineHeight:1.55,color:C.txt}}>{s.replace(/^Step \d+:\s*/,"")}</span></div>)}
-                <div style={{marginTop:12,padding:"10px 12px",background:`${C.wrn}10`,borderRadius:6,border:`1px solid ${C.wrn}18`}}><div style={{fontSize:10,color:C.wrn,lineHeight:1.5}}>Set "Save Settings" to <strong>Reset</strong>. Verify by switching mode dial away and back.</div></div>
-              </div>}
-            </div>}
-
-            <div style={{textAlign:"center",padding:"16px 0 0",borderTop:`1px solid ${C.bdr}`}}><button onClick={reset} style={{padding:"10px 24px",background:"transparent",border:`1px solid ${C.bdr}`,borderRadius:8,color:C.tD,fontSize:12,cursor:"pointer",fontFamily:"'Outfit',sans-serif"}}>Start Over</button></div>
-          </div>}
-        </>}
-      </main>
-    </div>
+            </>
+          )}
+        </>
+      )}
+    </>
   );
 }

@@ -702,7 +702,8 @@ function MapPanel({ center, userLocation, pins, activePin, onSelectPin, onAddPin
           display: "flex", alignItems: "center", gap: 5,
           pointerEvents: "auto", borderColor: T.strokeHi,
         }}>
-          📍 {pins.length}
+          <Icon name="pin" size={12} />
+          {pins.length}
         </button>
       </div>
 
@@ -1236,7 +1237,8 @@ function PostcodeSearch({ onResult, onSaveAsPin, onReturnHome, onEditHome, isAwa
             padding: "9px 12px",
             ...glass("lite"), borderRadius: 8, cursor: "pointer",
             color: T.textMid, fontSize: 12, fontFamily: FONT_SANS,
-          }} title="Back to home location">🏠</button>
+            display: "flex", alignItems: "center",
+          }} title="Back to home location"><Icon name="home" size={16} /></button>
         )}
       </div>
       {err && (
@@ -1258,7 +1260,8 @@ function PostcodeSearch({ onResult, onSaveAsPin, onReturnHome, onEditHome, isAwa
             ...glass("lite"), borderRadius: 6, cursor: "pointer",
             color: T.gold, fontSize: 11, fontFamily: FONT_SANS, fontWeight: 600,
             borderColor: `${T.gold}30`,
-          }}>📍 Save as pin</button>
+            display: "inline-flex", alignItems: "center", gap: 5,
+          }}><Icon name="pin" size={12} /> Save as pin</button>
         </div>
       )}
       {homePostcode && !lastResult && (
@@ -1267,7 +1270,9 @@ function PostcodeSearch({ onResult, onSaveAsPin, onReturnHome, onEditHome, isAwa
           borderTop: `1px solid ${T.stroke}`,
           fontSize: 10, color: T.textDim, fontFamily: FONT_MONO,
         }}>
-          <span>🏠 Home: {homePostcode}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <Icon name="home" size={11} /> Home: {homePostcode}
+          </span>
           <button onClick={onEditHome} style={{
             marginLeft: "auto",
             padding: "3px 8px",
@@ -1320,14 +1325,14 @@ function Label({ children, accent }) {
 
 /* ─── WEATHER HELPERS ─── */
 function parseW(w) {
-  if (!w) return { label: "Unknown", icon: "☁️", tone: "neutral" };
+  if (!w) return { label: "Unknown", iconKind: "cloud", tone: "neutral" };
   const c = w.weathercode;
-  if (c <= 1)  return { label: "Clear",         icon: "☀️", tone: "bright" };
-  if (c <= 3)  return { label: "Partly Cloudy", icon: "⛅", tone: "diffused" };
-  if (c <= 48) return { label: "Overcast",      icon: "☁️", tone: "flat" };
-  if (c <= 67) return { label: "Rain",          icon: "🌧️", tone: "moody" };
-  if (c <= 77) return { label: "Snow",          icon: "❄️", tone: "cold" };
-  return { label: "Storm", icon: "⛈️", tone: "moody" };
+  if (c <= 1)  return { label: "Clear",         iconKind: "sun",    tone: "bright" };
+  if (c <= 3)  return { label: "Partly Cloudy", iconKind: "partly", tone: "diffused" };
+  if (c <= 48) return { label: "Overcast",      iconKind: "cloud",  tone: "flat" };
+  if (c <= 67) return { label: "Rain",          iconKind: "rain",   tone: "moody" };
+  if (c <= 77) return { label: "Snow",          iconKind: "snow",   tone: "cold" };
+  return { label: "Storm", iconKind: "storm", tone: "moody" };
 }
 
 function analyzeForecast(forecast, currentWeather) {
@@ -1375,6 +1380,149 @@ function formatHour(h) {
 }
 
 /* ─── WEATHER ORB (atmospheric visual) ─── */
+/* ─── ICON SYSTEM ───
+   All inline SVGs, 24×24 viewBox, 2px stroke. Takes `size` (px) and `color`.
+   Chrome icons use currentColor by default; weather icons have baked palette tints
+   because we want the playful sun=gold / rain=blue / storm=red signal. */
+
+const ICON_PATHS = {
+  // Chrome — stroke-only, pick up currentColor
+  home:     `<path d="M3 11.5 L12 4 L21 11.5 M5 10 V20 H10 V14 H14 V20 H19 V10" />`,
+  compass:  `<circle cx="12" cy="12" r="9" /><path d="M15.5 8.5 L13 13 L8.5 15.5 L11 11 Z" fill="currentColor" stroke="none"/>`,
+  pin:      `<path d="M12 22 S6 14 6 10 A6 6 0 0 1 18 10 C18 14 12 22 12 22 Z" /><circle cx="12" cy="10" r="2.5" />`,
+  camera:   `<rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7 L9.5 4 H14.5 L16 7" /><circle cx="12" cy="13.5" r="3.5" />`,
+  drone:    `<path d="M6 6 L10 10 M14 10 L18 6 M18 18 L14 14 M10 14 L6 18" /><rect x="9" y="9" width="6" height="6" rx="1" /><circle cx="6" cy="6" r="2.5" /><circle cx="18" cy="6" r="2.5" /><circle cx="18" cy="18" r="2.5" /><circle cx="6" cy="18" r="2.5" />`,
+  heart:    `<path d="M12 20 S4 14 4 9 A4.5 4.5 0 0 1 12 6 A4.5 4.5 0 0 1 20 9 C20 14 12 20 12 20 Z" />`,
+  heartFilled: `<path d="M12 20 S4 14 4 9 A4.5 4.5 0 0 1 12 6 A4.5 4.5 0 0 1 20 9 C20 14 12 20 12 20 Z" fill="currentColor"/>`,
+  clock:    `<circle cx="12" cy="12" r="9" /><path d="M12 7 V12 L15.5 14" />`,
+  close:    `<path d="M6 6 L18 18 M18 6 L6 18" />`,
+  arrowBack:`<path d="M14 6 L8 12 L14 18 M8 12 H20" />`,
+};
+
+function Icon({ name, size = 18, color, strokeWidth = 2, style }) {
+  const path = ICON_PATHS[name];
+  if (!path) return null;
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke={color || "currentColor"}
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: "inline-block", flexShrink: 0, ...style }}
+      dangerouslySetInnerHTML={{ __html: path }}
+    />
+  );
+}
+
+/* ─── WEATHER ICONS ───
+   Purpose-built coloured SVGs for the hourly strip, weather orb, alert rows, etc.
+   Baked colours (sun=gold, rain=blue, etc) matching the playful weather convention. */
+
+/* MiniMoonIcon — small version of the custom waning-crescent moon used in WeatherOrb.
+   Sized for the hourly strip (~18px). Same carved-crescent technique: full white disc
+   with a darker disc offset upper-right via a mask to produce the crescent. */
+function MiniMoonIcon({ size = 18 }) {
+  const maskId = "miniMoonMask_" + Math.random().toString(36).slice(2, 7);
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: "inline-block", flexShrink: 0 }}>
+      <defs>
+        <mask id={maskId}>
+          <rect width="24" height="24" fill="black" />
+          <circle cx="12" cy="12" r="8" fill="white" />
+          <circle cx="15.5" cy="9" r="6.5" fill="black" />
+        </mask>
+      </defs>
+      <g mask={`url(#${maskId})`}>
+        <circle cx="12" cy="12" r="8" fill="#f4f2ea" />
+      </g>
+    </svg>
+  );
+}
+
+function WeatherIcon({ kind, size = 16 }) {
+  const s = size;
+  const common = { width: s, height: s, viewBox: "0 0 24 24", style: { display: "inline-block", flexShrink: 0 } };
+  switch (kind) {
+    case "sun":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="4" fill="#f4d890" stroke="#c79a3a" strokeWidth="1.2" />
+          <g stroke="#e8c670" strokeWidth="2" strokeLinecap="round">
+            <line x1="12" y1="2.5" x2="12" y2="5" />
+            <line x1="12" y1="19" x2="12" y2="21.5" />
+            <line x1="2.5" y1="12" x2="5" y2="12" />
+            <line x1="19" y1="12" x2="21.5" y2="12" />
+            <line x1="5.2" y1="5.2" x2="7" y2="7" />
+            <line x1="17" y1="17" x2="18.8" y2="18.8" />
+            <line x1="5.2" y1="18.8" x2="7" y2="17" />
+            <line x1="17" y1="7" x2="18.8" y2="5.2" />
+          </g>
+        </svg>
+      );
+    case "partly":
+      return (
+        <svg {...common}>
+          <circle cx="8.5" cy="9" r="3.5" fill="#f4d890" stroke="#c79a3a" strokeWidth="1.2" />
+          <g stroke="#e8c670" strokeWidth="1.6" strokeLinecap="round">
+            <line x1="8.5" y1="2" x2="8.5" y2="4" />
+            <line x1="2" y1="9" x2="4" y2="9" />
+            <line x1="3.5" y1="4" x2="5" y2="5.5" />
+            <line x1="13.5" y1="4" x2="12" y2="5.5" />
+          </g>
+          <path d="M6 16 A3.5 3.5 0 0 1 10 12 A3.5 3.5 0 0 1 14 14 A3 3 0 0 1 17 20 H7 A3 3 0 0 1 6 16 Z"
+            fill="#8a9098" stroke="#5a6268" strokeWidth="1.2" strokeLinejoin="round" />
+        </svg>
+      );
+    case "cloud":
+      return (
+        <svg {...common}>
+          <path d="M6 18 A4 4 0 0 1 7 10 A5 5 0 0 1 16 9 A4 4 0 0 1 19 17 Z"
+            fill="#9aa0aa" stroke="#6a7078" strokeWidth="1.3" strokeLinejoin="round" />
+        </svg>
+      );
+    case "rain":
+      return (
+        <svg {...common}>
+          <path d="M6 14 A4 4 0 0 1 7 6 A5 5 0 0 1 16 5 A4 4 0 0 1 19 13 Z"
+            fill="#8a9098" stroke="#5a6268" strokeWidth="1.2" strokeLinejoin="round" />
+          <g stroke="#5a96d8" strokeWidth="2" strokeLinecap="round">
+            <line x1="8" y1="16" x2="7" y2="20" />
+            <line x1="12" y1="16" x2="11" y2="20" />
+            <line x1="16" y1="16" x2="15" y2="20" />
+          </g>
+        </svg>
+      );
+    case "snow":
+      return (
+        <svg {...common}>
+          <path d="M6 14 A4 4 0 0 1 7 6 A5 5 0 0 1 16 5 A4 4 0 0 1 19 13 Z"
+            fill="#a0a8b4" stroke="#6a7078" strokeWidth="1.2" strokeLinejoin="round" />
+          <g stroke="#cfd8e0" strokeWidth="1.8" strokeLinecap="round">
+            <line x1="8" y1="17" x2="8" y2="21" />
+            <line x1="6.5" y1="19" x2="9.5" y2="19" />
+            <line x1="13" y1="17" x2="13" y2="21" />
+            <line x1="11.5" y1="19" x2="14.5" y2="19" />
+          </g>
+        </svg>
+      );
+    case "storm":
+      return (
+        <svg {...common}>
+          <path d="M6 13 A4 4 0 0 1 7 5 A5 5 0 0 1 16 4 A4 4 0 0 1 19 12 Z"
+            fill="#7a7080" stroke="#4a4458" strokeWidth="1.2" strokeLinejoin="round" />
+          <path d="M11 13 L8 18 H11 L10 22 L14 16 H11 L12 13 Z"
+            fill="#f0b840" stroke="#c08020" strokeWidth="1" strokeLinejoin="round" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...common}>
+          <path d="M6 18 A4 4 0 0 1 7 10 A5 5 0 0 1 16 9 A4 4 0 0 1 19 17 Z"
+            fill="#9aa0aa" stroke="#6a7078" strokeWidth="1.3" strokeLinejoin="round" />
+        </svg>
+      );
+  }
+}
+
 /* ─── DIRECTION DIALS (sun & wind) ─── */
 // A minimalist circular dial. The ring + N tick rotate *opposite* to the phone heading
 // so that N always points at real-world north. The arrow points in the dataDeg direction
@@ -1396,7 +1544,7 @@ function DirectionDial({ label, valueLabel, dataDeg, arrowColor, heading, disabl
       ...glass("base"),
       padding: 12, borderRadius: 14,
       display: "flex", flexDirection: "column", alignItems: "center",
-      gap: 8, flex: 1, minWidth: 0,
+      gap: 14, flex: 1, minWidth: 0,
       opacity: disabled ? 0.5 : 1,
     }}>
       <div style={{
@@ -1515,7 +1663,7 @@ function EnableCompassButton({ onEnable }) {
         display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         borderColor: `${T.gold}25`,
       }}>
-        <span style={{ fontSize: 14 }}>🧭</span>
+        <Icon name="compass" size={16} />
         Enable compass for live direction dials
       </button>
     </div>
@@ -1685,7 +1833,7 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device 
                     background: `${droneColour}20`, color: droneColour,
                     fontFamily: "'JetBrains Mono', monospace", fontWeight: 600,
                     display: "inline-flex", alignItems: "center", gap: 5,
-                  }}>🚁 {droneLabel}</div>
+                  }}><Icon name="drone" size={12} /> {droneLabel}</div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 12, fontSize: 11, color: T.textDim, fontFamily: "'JetBrains Mono', monospace", marginTop: 8 }}>
@@ -1758,7 +1906,7 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device 
                   lineHeight: 1.2,
                 }}>
                   <span style={{ color: droneColour, fontSize: 9, lineHeight: 1 }}>●</span>
-                  <span style={{ fontSize: 12, lineHeight: 1 }}>🚁</span>
+                  <Icon name="drone" size={11} />
                   {droneLabel}
                 </span>
               </div>
@@ -1771,10 +1919,10 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device 
       {info && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
           {info.nextSun && weather.weathercode > 3 && (
-            <AlertRow icon="☀️" colour={T.wrn} text={`Sun due around ${formatHour(info.nextSun.hour)}`} detail={`${info.nextSun.cloud}% cloud`} />
+            <AlertRow iconKind="sun" colour={T.wrn} text={`Sun due around ${formatHour(info.nextSun.hour)}`} detail={`${info.nextSun.cloud}% cloud`} />
           )}
           {info.nextRain && weather.weathercode < 50 && (
-            <AlertRow icon="🌧️" colour={T.blu} text={`Rain risk from ${formatHour(info.nextRain.hour)}`} detail={`${info.nextRain.rainProb}% chance`} />
+            <AlertRow iconKind="rain" colour={T.blu} text={`Rain risk from ${formatHour(info.nextRain.hour)}`} detail={`${info.nextRain.rainProb}% chance`} />
           )}
           {!isN && (
             <AlertRow
@@ -1801,20 +1949,20 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device 
               const isRainy = h.code >= 51 && h.code <= 67;
               const isSnowy = h.code >= 71 && h.code <= 77;
               const isStormy = h.code >= 80;
-              let icon;
-              if (isRainy) icon = "🌧️";
-              else if (isSnowy) icon = "❄️";
-              else if (isStormy) icon = "⛈️";
+              // iconKind values map to WeatherIcon except "moon" which we render inline as a mini SVG
+              let iconKind;
+              if (isRainy) iconKind = "rain";
+              else if (isSnowy) iconKind = "snow";
+              else if (isStormy) iconKind = "storm";
               else if (!h.isDay) {
                 // Night: pick based on cloud cover
-                if (h.cloud < 30) icon = "🌙";
-                else if (h.cloud < 70) icon = "☁️";
-                else icon = "☁️";
+                if (h.cloud < 30) iconKind = "moon";
+                else iconKind = "cloud";
               } else {
                 // Day: standard sun-driven
-                if (h.code <= 1) icon = "☀️";
-                else if (h.code <= 3) icon = "⛅";
-                else icon = "☁️";
+                if (h.code <= 1) iconKind = "sun";
+                else if (h.code <= 3) iconKind = "partly";
+                else iconKind = "cloud";
               }
               // Rain % visibility: always show for ≥ 15%, grey below that
               const showRain = h.rainProb >= 15;
@@ -1830,7 +1978,9 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device 
                     fontSize: 11, color: isNow ? T.gold : T.textMid,
                     fontFamily: FONT_DISPLAY, lineHeight: 1,
                   }}>{isNow ? "NOW" : formatHour(h.hour)}</div>
-                  <div style={{ fontSize: 16, margin: "5px 0 4px" }}>{icon}</div>
+                  <div style={{ margin: "5px 0 4px", display: "flex", justifyContent: "center", alignItems: "center", height: 20 }}>
+                    {iconKind === "moon" ? <MiniMoonIcon size={18} /> : <WeatherIcon kind={iconKind} size={18} />}
+                  </div>
                   <div style={{ fontSize: 13, color: T.text, fontFamily: FONT_DISPLAY, lineHeight: 1 }}>{h.temp}°</div>
                   {showRain && (
                     <div style={{ fontSize: 10, color: rainColor, fontFamily: FONT_DISPLAY, marginTop: 3, lineHeight: 1 }}>{h.rainProb}%</div>
@@ -1845,7 +1995,7 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device 
   );
 }
 
-function AlertRow({ icon, colour, text, detail }) {
+function AlertRow({ iconKind, colour, text, detail }) {
   return (
     <div style={{
       ...glass("lite"),
@@ -1853,7 +2003,9 @@ function AlertRow({ icon, colour, text, detail }) {
       padding: "9px 14px", borderRadius: 10,
       borderColor: `${colour}20`, background: `${colour}10`,
     }}>
-      <span style={{ fontSize: 13 }}>{icon}</span>
+      <span style={{ display: "flex", alignItems: "center" }}>
+        <WeatherIcon kind={iconKind || "cloud"} size={15} />
+      </span>
       <div style={{ fontSize: 11, color: colour, flex: 1 }}>
         <span style={{ fontWeight: 600 }}>{text}</span>
         {detail && <span style={{ color: T.textDim, marginLeft: 6, fontFamily: "'JetBrains Mono', monospace" }}>({detail})</span>}
@@ -2900,7 +3052,9 @@ export default function App() {
                 display: "flex", alignItems: "center", gap: 8,
                 padding: "6px 12px", borderRadius: 12,
               }}>
-                <span style={{ fontSize: 12 }}>{isN ? "🌙" : wi.icon}</span>
+                <span style={{ display: "flex", alignItems: "center" }}>
+                  {isN ? <MiniMoonIcon size={14} /> : <WeatherIcon kind={wi.iconKind || "cloud"} size={14} />}
+                </span>
                 <span style={{
                   fontSize: 15, color: T.text, fontFamily: FONT_DISPLAY,
                   lineHeight: 1, marginTop: 1,
@@ -2931,7 +3085,7 @@ export default function App() {
               fontSize: 10, color: !kit.length ? T.amber : T.textMid,
               animation: !kit.length ? "pulse 2s ease infinite" : "none",
             }}>
-              <span style={{ fontSize: 11 }}>📷</span>
+              <Icon name="camera" size={12} />
               {!kit.length ? "Add lenses" : `${kit.length} lens${kit.length !== 1 ? "es" : ""}`}
             </button>
           </div>
@@ -2945,7 +3099,9 @@ export default function App() {
 
         {!kit.length && (
           <div style={{ textAlign: "center", padding: "60px 20px" }}>
-            <div style={{ fontSize: 44, marginBottom: 14, opacity: 0.5 }}>📷</div>
+            <div style={{ marginBottom: 14, opacity: 0.5, display: "flex", justifyContent: "center" }}>
+              <Icon name="camera" size={44} strokeWidth={1.5} color={T.textMid} />
+            </div>
             <div style={{
               fontSize: 20, fontWeight: 700, color: T.text, marginBottom: 8,
               fontFamily: FONT_SANS, letterSpacing: "-0.02em",
@@ -3143,7 +3299,9 @@ export default function App() {
                       display: "flex", alignItems: "center", gap: 10,
                       borderColor: `${T.blu}20`, background: `${T.blu}08`,
                     }}>
-                      <span style={{ fontSize: 14 }}>🕘</span>
+                      <span style={{ color: T.blu, display: "flex", alignItems: "center" }}>
+                        <Icon name="clock" size={16} />
+                      </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 10, color: T.blu, fontFamily: FONT_MONO, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>From history</div>
                         <div style={{ fontSize: 11, color: T.textMid, marginTop: 2, fontFamily: FONT_MONO }}>{snapDesc}</div>

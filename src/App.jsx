@@ -371,6 +371,50 @@ function useFavourites() {
   return [favs, toggleFav];
 }
 
+/* ─── HOME LOCATION STORAGE ─── */
+const HOME_LOC_KEY = "om-advisor-home-v1";
+
+function useHomeLocation() {
+  const [home, setHomeState] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(HOME_LOC_KEY));
+      if (s && typeof s.lat === "number" && typeof s.lon === "number") return s;
+      return null;
+    } catch { return null; }
+  });
+  const setHome = useCallback((loc) => {
+    setHomeState(loc);
+    try {
+      if (loc) localStorage.setItem(HOME_LOC_KEY, JSON.stringify(loc));
+      else localStorage.removeItem(HOME_LOC_KEY);
+    } catch {}
+  }, []);
+  return [home, setHome];
+}
+
+/* ─── POSTCODE LOOKUP (postcodes.io — free, UK-only, no key) ─── */
+function normalisePostcode(pc) {
+  return String(pc || "").toUpperCase().replace(/\s+/g, "").trim();
+}
+
+async function lookupPostcode(postcode) {
+  const clean = normalisePostcode(postcode);
+  if (!clean) throw new Error("Empty postcode");
+  const res = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(clean)}`);
+  if (res.status === 404) throw new Error("Postcode not found");
+  if (!res.ok) throw new Error(`Lookup failed (${res.status})`);
+  const data = await res.json();
+  const r = data.result;
+  if (!r) throw new Error("No result");
+  return {
+    postcode: r.postcode,
+    lat: r.latitude,
+    lon: r.longitude,
+    label: r.admin_ward || r.parish || r.admin_district || r.postcode,
+    district: r.admin_district,
+  };
+}
+
 /* ─── MAPLIBRE LAZY LOADER ─── */
 let mapLibrePromise = null;
 function loadMapLibre() {
@@ -941,6 +985,211 @@ function HistoryPanel({ history, favs, toggleFav, removeEntry, clearHistory, onO
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── HOME SETUP MODAL (first-run blocking) ─── */
+function HomeSetupModal({ currentHome, onSave, onClose }) {
+  const [pc, setPc] = useState(currentHome?.postcode || "");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+
+  async function submit() {
+    setErr(null);
+    const clean = normalisePostcode(pc);
+    if (!clean) { setErr("Enter a UK postcode."); return; }
+    setLoading(true);
+    try {
+      const loc = await lookupPostcode(clean);
+      onSave(loc);
+    } catch (e) {
+      setErr(e.message || "Couldn't find that postcode. Try again?");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 110,
+      background: "rgba(5, 5, 8, 0.92)", backdropFilter: "blur(16px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20,
+    }}>
+      <div style={{
+        ...glass("bri"),
+        maxWidth: 440, width: "100%",
+        padding: 28, borderRadius: 16,
+        borderColor: T.strokeHi,
+      }}>
+        <div style={{
+          fontSize: 11, textTransform: "uppercase", letterSpacing: "0.16em",
+          color: T.gold, fontFamily: FONT_MONO, marginBottom: 8, fontWeight: 600,
+        }}>{currentHome ? "Update home location" : "Welcome"}</div>
+        <div style={{
+          fontSize: 22, fontWeight: 700, color: T.text,
+          fontFamily: FONT_SANS, letterSpacing: "-0.02em", marginBottom: 8,
+          lineHeight: 1.2,
+        }}>{currentHome ? "Change your home location" : "What's your home location?"}</div>
+        <div style={{
+          fontSize: 13, color: T.textMid, marginBottom: 20, lineHeight: 1.5,
+        }}>
+          {currentHome
+            ? `Currently set to ${currentHome.postcode}${currentHome.label ? ` (${currentHome.label})` : ""}. Enter a new UK postcode to change it.`
+            : "Enter your UK postcode so the app knows where you are. This sets the default location for weather and map. You can search other places later."}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: err ? 10 : 16 }}>
+          <input
+            type="text"
+            value={pc}
+            onChange={(e) => setPc(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+            placeholder="e.g. SK7 1AB"
+            autoFocus
+            autoCapitalize="characters"
+            autoComplete="postal-code"
+            style={{
+              flex: 1, padding: "12px 14px",
+              ...glass("lite"),
+              color: T.text, fontSize: 14, fontFamily: FONT_MONO,
+              letterSpacing: "0.04em",
+              outline: "none",
+            }}
+          />
+          <button onClick={submit} disabled={loading} style={{
+            padding: "12px 20px", border: "none", borderRadius: 10,
+            background: `linear-gradient(135deg, ${T.gold}, ${T.amber})`,
+            color: T.bgWarm, fontSize: 13, fontWeight: 700,
+            cursor: loading ? "wait" : "pointer", fontFamily: FONT_SANS,
+            opacity: loading ? 0.7 : 1,
+          }}>{loading ? "…" : "Set"}</button>
+        </div>
+        {err && (
+          <div style={{ fontSize: 12, color: T.red, marginBottom: 16, fontFamily: FONT_MONO }}>
+            {err}
+          </div>
+        )}
+        {currentHome && (
+          <button onClick={onClose} style={{
+            ...glass("lite"), padding: "10px 18px", borderRadius: 10, cursor: "pointer",
+            color: T.textDim, fontSize: 12, fontFamily: FONT_SANS, width: "100%",
+          }}>Cancel</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── POSTCODE SEARCH (above the map) ─── */
+function PostcodeSearch({ onResult, onSaveAsPin, onReturnHome, onEditHome, isAwayFromHome, homePostcode }) {
+  const [pc, setPc] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+  const [lastResult, setLastResult] = useState(null); // { postcode, lat, lon, label } — to offer 'Save as pin'
+
+  async function submit() {
+    setErr(null);
+    const clean = normalisePostcode(pc);
+    if (!clean) { setErr("Enter a postcode."); return; }
+    setLoading(true);
+    try {
+      const loc = await lookupPostcode(clean);
+      setLastResult(loc);
+      onResult(loc);
+      setPc("");
+    } catch (e) {
+      setErr(e.message || "Not found");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{
+      ...glass("base"),
+      padding: 10, borderRadius: 12, marginBottom: 8,
+    }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+        <div style={{
+          padding: "0 10px", display: "flex", alignItems: "center",
+          fontSize: 10, color: T.textDim, fontFamily: FONT_MONO,
+          letterSpacing: "0.14em", textTransform: "uppercase",
+        }}>Search</div>
+        <input
+          type="text"
+          value={pc}
+          onChange={(e) => setPc(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+          placeholder="UK postcode"
+          autoCapitalize="characters"
+          autoComplete="postal-code"
+          style={{
+            flex: 1, padding: "9px 12px",
+            background: "rgba(0,0,0,0.3)",
+            border: `1px solid ${T.stroke}`,
+            borderRadius: 8,
+            color: T.text, fontSize: 13, fontFamily: FONT_MONO,
+            letterSpacing: "0.04em",
+            outline: "none", minWidth: 0,
+          }}
+        />
+        <button onClick={submit} disabled={loading} style={{
+          padding: "9px 16px",
+          background: pc ? `linear-gradient(135deg, ${T.gold}, ${T.amber})` : T.surface,
+          border: `1px solid ${pc ? "transparent" : T.stroke}`,
+          borderRadius: 8,
+          color: pc ? T.bgWarm : T.textDim,
+          fontSize: 12, fontWeight: 600,
+          cursor: loading ? "wait" : "pointer", fontFamily: FONT_SANS,
+          opacity: loading ? 0.6 : 1,
+        }}>{loading ? "…" : "Go"}</button>
+        {isAwayFromHome && (
+          <button onClick={() => { setLastResult(null); onReturnHome(); }} style={{
+            padding: "9px 12px",
+            ...glass("lite"), borderRadius: 8, cursor: "pointer",
+            color: T.textMid, fontSize: 12, fontFamily: FONT_SANS,
+          }} title="Back to home location">🏠</button>
+        )}
+      </div>
+      {err && (
+        <div style={{ fontSize: 11, color: T.red, marginTop: 8, fontFamily: FONT_MONO, paddingLeft: 2 }}>
+          {err}
+        </div>
+      )}
+      {lastResult && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginTop: 8, paddingTop: 8,
+          borderTop: `1px solid ${T.stroke}`,
+        }}>
+          <div style={{ flex: 1, fontSize: 11, color: T.textMid, fontFamily: FONT_MONO, minWidth: 0 }}>
+            Showing <span style={{ color: T.gold, fontWeight: 600 }}>{lastResult.postcode}</span>
+            {lastResult.label && <span style={{ color: T.textDim }}> · {lastResult.label}</span>}
+          </div>
+          <button onClick={() => { onSaveAsPin(lastResult); setLastResult(null); }} style={{
+            padding: "5px 10px",
+            ...glass("lite"), borderRadius: 6, cursor: "pointer",
+            color: T.gold, fontSize: 11, fontFamily: FONT_SANS, fontWeight: 600,
+            borderColor: `${T.gold}30`,
+          }}>📍 Save as pin</button>
+        </div>
+      )}
+      {homePostcode && !lastResult && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 6, marginTop: 8, paddingTop: 8,
+          borderTop: `1px solid ${T.stroke}`,
+          fontSize: 10, color: T.textDim, fontFamily: FONT_MONO,
+        }}>
+          <span>🏠 Home: {homePostcode}</span>
+          <button onClick={onEditHome} style={{
+            marginLeft: "auto",
+            padding: "3px 8px",
+            background: "transparent", border: "none",
+            color: T.textMid, fontSize: 10, cursor: "pointer", fontFamily: FONT_SANS,
+            textDecoration: "underline",
+          }}>Change</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2137,29 +2386,29 @@ export default function App() {
   const [favs, toggleFav] = useFavourites();
   const [device, setDevice] = useState("om1");
 
-  // Location / pins
+  // Location / pins / home
   const [pins, setPins] = usePins();
   const [activePin, setActivePinId] = useActivePin(pins);
-  const [geoCenter, setGeoCenter] = useState(DEFAULT_LOCATION);
-  const [userLocation, setUserLocation] = useState(null); // { lat, lon } or null — where the GPS says you are
-  const [geoRequested, setGeoRequested] = useState(false);
+  const [home, setHome] = useHomeLocation();
+  const [searchLocation, setSearchLocation] = useState(null); // non-null when user has searched another postcode
+  const [showHomeSetup, setShowHomeSetup] = useState(false);
 
-  // Ask for geolocation once on mount
+  // First-run: prompt for home postcode if unset
   useEffect(() => {
-    if (geoRequested) return;
-    setGeoRequested(true);
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        setGeoCenter({ ...coords, label: "Your location" });
-        setUserLocation(coords);
-      },
-      () => { /* denied or failed: keep Stockport default, no user marker */ },
-      { timeout: 10000, maximumAge: 60000, enableHighAccuracy: true }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!home) setShowHomeSetup(true);
+  }, [home]);
+
+  // Effective map centre: active pin > search result > home > default Stockport
+  const geoCenter = activePin
+    ? { lat: activePin.lat, lon: activePin.lon, label: activePin.label || "Pin" }
+    : searchLocation
+    ? { lat: searchLocation.lat, lon: searchLocation.lon, label: searchLocation.label || searchLocation.postcode }
+    : home
+    ? { lat: home.lat, lon: home.lon, label: home.label || home.postcode }
+    : DEFAULT_LOCATION;
+
+  // The user's physical "home" marker on the map. Shown whenever home is set, regardless of where the map is centred.
+  const userLocation = home ? { lat: home.lat, lon: home.lon } : null;
 
   // Handlers for map interaction
   const addPin = useCallback((coords) => {
@@ -2374,6 +2623,7 @@ export default function App() {
       {showKit && <KitPanel kit={kit} setKit={setKit} onClose={() => setShowKit(false)}/>}
       {showPins && <PinsPanel pins={pins} setPins={setPins} activePinId={activePin?.id} setActivePinId={setActivePinId} onClose={() => setShowPins(false)}/>}
       {showHistory && <HistoryPanel history={history} favs={favs} toggleFav={toggleFav} removeEntry={removeHistoryEntry} clearHistory={clearHistory} onOpen={openHistoryEntry} onClose={() => setShowHistory(false)}/>}
+      {showHomeSetup && <HomeSetupModal currentHome={home} onSave={(loc) => { setHome(loc); setSearchLocation(null); setActivePinId(null); setShowHomeSetup(false); }} onClose={() => setShowHomeSetup(false)} />}
 
       {/* HEADER */}
       <header style={{
@@ -2477,6 +2727,22 @@ export default function App() {
 
         {!!kit.length && (
           <>
+            {/* POSTCODE SEARCH */}
+            <PostcodeSearch
+              onResult={(loc) => { setSearchLocation(loc); setActivePinId(null); }}
+              onSaveAsPin={(loc) => {
+                const id = "pin_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+                const newPin = { id, lat: loc.lat, lon: loc.lon, label: loc.label || loc.postcode };
+                setPins((prev) => [...prev, newPin]);
+                setActivePinId(id);
+                setSearchLocation(null);
+              }}
+              onReturnHome={() => { setSearchLocation(null); setActivePinId(null); }}
+              onEditHome={() => setShowHomeSetup(true)}
+              isAwayFromHome={!!(searchLocation || activePin)}
+              homePostcode={home?.postcode}
+            />
+
             {/* MAP — hero panel at the top */}
             <div style={{ marginBottom: 16 }}>
               <MapPanel

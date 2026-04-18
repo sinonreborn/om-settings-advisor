@@ -415,6 +415,93 @@ async function lookupPostcode(postcode) {
   };
 }
 
+/* ─── COMPASS HEADING ───
+   Returns [heading, status, enable] where:
+   - heading: degrees clockwise from true north (0..360), or null if unknown
+   - status: "unsupported" | "pending" | "enabled" | "denied"
+   - enable: function to call (from a user tap) to request permission
+*/
+const COMPASS_PREF_KEY = "om-advisor-compass-enabled-v1";
+
+function useCompassHeading() {
+  const [heading, setHeading] = useState(null);
+  const [status, setStatus] = useState(() => {
+    if (typeof window === "undefined") return "unsupported";
+    // No DeviceOrientationEvent → unsupported.
+    if (!("DeviceOrientationEvent" in window)) return "unsupported";
+    return "pending";
+  });
+
+  // If the user previously enabled compass on a browser that DOESN'T require explicit permission
+  // (i.e. non-iOS), auto-attach the listener on mount.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("DeviceOrientationEvent" in window)) return;
+    const needsPermission = typeof window.DeviceOrientationEvent.requestPermission === "function";
+    if (needsPermission) return; // iOS: wait for user tap
+    // Android / other: try to attach listener now if user previously opted in
+    let previouslyEnabled = false;
+    try { previouslyEnabled = localStorage.getItem(COMPASS_PREF_KEY) === "yes"; } catch {}
+    if (!previouslyEnabled) return;
+    attachOrientationListener(setHeading, setStatus);
+    return () => detachOrientationListener();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const enable = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!("DeviceOrientationEvent" in window)) { setStatus("unsupported"); return; }
+    const needsPermission = typeof window.DeviceOrientationEvent.requestPermission === "function";
+    try {
+      if (needsPermission) {
+        const perm = await window.DeviceOrientationEvent.requestPermission();
+        if (perm !== "granted") { setStatus("denied"); return; }
+      }
+      attachOrientationListener(setHeading, setStatus);
+      try { localStorage.setItem(COMPASS_PREF_KEY, "yes"); } catch {}
+    } catch (e) {
+      console.error("Compass enable error:", e);
+      setStatus("denied");
+    }
+  }, []);
+
+  return [heading, status, enable];
+}
+
+// Module-level listener management — only one attached at a time across hook remounts
+let _orientationHandler = null;
+function attachOrientationListener(setHeading, setStatus) {
+  if (_orientationHandler) return;
+  _orientationHandler = (e) => {
+    // iOS: webkitCompassHeading is degrees clockwise from true north (what we want, directly)
+    if (typeof e.webkitCompassHeading === "number" && !Number.isNaN(e.webkitCompassHeading)) {
+      setHeading(e.webkitCompassHeading);
+      return;
+    }
+    // Standard: alpha is degrees CCW from device's arbitrary zero when 'absolute' false
+    // With absolute true (or deviceorientationabsolute event), alpha is degrees from magnetic north CCW
+    // We want CW from north: 360 - alpha
+    if (typeof e.alpha === "number" && !Number.isNaN(e.alpha)) {
+      // Only trust absolute readings for heading. If e.absolute is false, the value is relative
+      // to device's arbitrary zero and not a real compass heading.
+      if (e.absolute) {
+        setHeading((360 - e.alpha) % 360);
+      }
+    }
+  };
+  // Prefer the absolute variant where supported (Android Chrome)
+  const useAbsolute = "ondeviceorientationabsolute" in window;
+  const eventName = useAbsolute ? "deviceorientationabsolute" : "deviceorientation";
+  window.addEventListener(eventName, _orientationHandler, true);
+  setStatus("enabled");
+}
+function detachOrientationListener() {
+  if (!_orientationHandler) return;
+  window.removeEventListener("deviceorientation", _orientationHandler, true);
+  window.removeEventListener("deviceorientationabsolute", _orientationHandler, true);
+  _orientationHandler = null;
+}
+
 /* ─── MAPLIBRE LAZY LOADER ─── */
 let mapLibrePromise = null;
 function loadMapLibre() {
@@ -1288,6 +1375,153 @@ function formatHour(h) {
 }
 
 /* ─── WEATHER ORB (atmospheric visual) ─── */
+/* ─── DIRECTION DIALS (sun & wind) ─── */
+// A minimalist circular dial. The ring + N tick rotate *opposite* to the phone heading
+// so that N always points at real-world north. The arrow points in the dataDeg direction
+// (also real-world). When heading is 0 or null, N is at top.
+function DirectionDial({ label, valueLabel, dataDeg, arrowColor, heading, disabled }) {
+  const size = 120;
+  const r = size / 2;
+  const ringR = r - 10;
+  // How much to rotate the ring itself so that N marker reflects device orientation.
+  // If heading is 90 (facing east), N should appear to the left of user (rotated -90).
+  const ringRotate = heading != null ? -heading : 0;
+  // Arrow rotation in map-space. dataDeg is degrees CW from North.
+  // When the ring rotates by ringRotate, the arrow needs to rotate by (dataDeg + ringRotate)
+  // to stay absolute in viewer space.
+  const arrowRotate = dataDeg != null ? dataDeg + ringRotate : null;
+
+  return (
+    <div style={{
+      ...glass("base"),
+      padding: 12, borderRadius: 14,
+      display: "flex", flexDirection: "column", alignItems: "center",
+      gap: 8, flex: 1, minWidth: 0,
+      opacity: disabled ? 0.5 : 1,
+    }}>
+      <div style={{
+        position: "relative", width: size, height: size, flexShrink: 0,
+      }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: "visible" }}>
+          {/* Ring + N marker group — rotates opposite to heading */}
+          <g transform={`rotate(${ringRotate} ${r} ${r})`} style={{ transition: "transform 180ms linear" }}>
+            {/* Ring */}
+            <circle cx={r} cy={r} r={ringR} fill="none" stroke="rgba(255,240,220,0.12)" strokeWidth="1" />
+            {/* Subtle cardinal tick marks at E, S, W (N has its own label) */}
+            {[90, 180, 270].map((deg) => {
+              const rad = (deg - 90) * Math.PI / 180;
+              const x1 = r + (ringR - 3) * Math.cos(rad);
+              const y1 = r + (ringR - 3) * Math.sin(rad);
+              const x2 = r + (ringR + 1) * Math.cos(rad);
+              const y2 = r + (ringR + 1) * Math.sin(rad);
+              return <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,240,220,0.08)" strokeWidth="1" />;
+            })}
+            {/* N marker — small pip just outside the ring at top */}
+            <circle cx={r} cy={r - ringR - 4} r="2" fill="rgba(232,208,160,0.7)" />
+            <text x={r} y={r - ringR - 8} textAnchor="middle" fontSize="9" fill="rgba(232,208,160,0.85)"
+              fontFamily="'JetBrains Mono', monospace" fontWeight="700" letterSpacing="0.1em">N</text>
+          </g>
+
+          {/* Arrow group — rotates to real-world direction (stays map-absolute) */}
+          {arrowRotate != null && !disabled && (
+            <g transform={`rotate(${arrowRotate} ${r} ${r})`} style={{ transition: "transform 180ms linear" }}>
+              {/* Arrow shaft */}
+              <line x1={r} y1={r + (ringR - 8)} x2={r} y2={r - (ringR - 10)} stroke={arrowColor} strokeWidth="2" strokeLinecap="round" />
+              {/* Arrow head */}
+              <polygon
+                points={`${r},${r - (ringR - 4)} ${r - 5},${r - (ringR - 12)} ${r + 5},${r - (ringR - 12)}`}
+                fill={arrowColor}
+              />
+              {/* Centre dot */}
+              <circle cx={r} cy={r} r="2.5" fill={arrowColor} />
+            </g>
+          )}
+          {(arrowRotate == null || disabled) && (
+            <circle cx={r} cy={r} r="2.5" fill="rgba(255,240,220,0.2)" />
+          )}
+        </svg>
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{
+          fontSize: 9, color: T.textDim, fontFamily: "'JetBrains Mono', monospace",
+          letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 600,
+        }}>{label}</div>
+        <div style={{
+          fontSize: 13, color: T.text, fontWeight: 600, marginTop: 2,
+          fontFamily: "'Inter', sans-serif",
+        }}>{valueLabel}</div>
+      </div>
+    </div>
+  );
+}
+
+function DirectionDials({ sun, wind, heading, compassStatus }) {
+  const sunBelow = !sun || sun.altitude == null || sun.altitude <= -0.5;
+  const sunAzi = sun?.azimuth != null ? sun.azimuth : null;
+  const sunAlt = sun?.altitude;
+  const sunValue = sunBelow ? "Below horizon" : `${Math.round(sunAlt)}° altitude`;
+
+  const windFrom = wind?.dir;
+  const windSpeed = wind?.speed != null ? Math.round(wind.speed) : null;
+  const windValue = windSpeed != null ? `${windSpeed} mph ${compassDir(windFrom)}` : "—";
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <DirectionDial
+          label="Sun"
+          valueLabel={sunValue}
+          dataDeg={sunBelow ? null : sunAzi}
+          arrowColor="#f4d890"
+          heading={heading}
+          disabled={sunBelow}
+        />
+        <DirectionDial
+          label="Wind from"
+          valueLabel={windValue}
+          dataDeg={windFrom}
+          arrowColor="#80a0c0"
+          heading={heading}
+          disabled={windFrom == null}
+        />
+      </div>
+      {compassStatus === "enabled" && (
+        <div style={{
+          fontSize: 9, color: T.textDim, textAlign: "center", marginTop: 6,
+          fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em", textTransform: "uppercase",
+        }}>Compass live · hold phone upright</div>
+      )}
+      {compassStatus === "denied" && (
+        <div style={{
+          fontSize: 10, color: T.textDim, textAlign: "center", marginTop: 6,
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          Permission denied. Enable in iOS Settings → Safari → Motion & Orientation.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EnableCompassButton({ onEnable }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <button onClick={onEnable} style={{
+        width: "100%",
+        ...glass("base"),
+        padding: "10px 14px", cursor: "pointer",
+        color: T.gold, fontSize: 12, fontWeight: 600,
+        fontFamily: "'Inter', sans-serif",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        borderColor: `${T.gold}25`,
+      }}>
+        <span style={{ fontSize: 14 }}>🧭</span>
+        Enable compass for live direction dials
+      </button>
+    </div>
+  );
+}
+
 function WeatherOrb({ weather }) {
   if (!weather) return null;
   const c = weather.weathercode;
@@ -2391,6 +2625,7 @@ export default function App() {
   const [activePin, setActivePinId] = useActivePin(pins);
   const [home, setHome] = useHomeLocation();
   const [searchLocation, setSearchLocation] = useState(null); // non-null when user has searched another postcode
+  const [heading, compassStatus, enableCompass] = useCompassHeading();
   const [showHomeSetup, setShowHomeSetup] = useState(false);
 
   // First-run: prompt for home postcode if unset
@@ -2447,6 +2682,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
   const resultRef = useRef(null);
+
+  // Sun + wind data for the direction dials (computed after weather state exists)
+  const dialSun = sunPosition(new Date(), geoCenter.lat, geoCenter.lon);
+  const dialWind = weather ? { speed: weather.windspeed, dir: weather.winddirection || 0 } : null;
 
   // Fetch weather — refetches when active pin or geo center changes
   useEffect(() => {
@@ -2756,6 +2995,17 @@ export default function App() {
                 onOpenPins={() => setShowPins(true)}
               />
             </div>
+
+            {/* DIRECTION DIALS (compass-aware, optional) — appears after Enable Compass tap */}
+            {compassStatus === "enabled" && (
+              <DirectionDials sun={dialSun} wind={dialWind} heading={heading} compassStatus={compassStatus} />
+            )}
+            {compassStatus === "pending" && (
+              <EnableCompassButton onEnable={enableCompass} />
+            )}
+            {compassStatus === "denied" && (
+              <DirectionDials sun={dialSun} wind={dialWind} heading={null} compassStatus={compassStatus} />
+            )}
 
             {/* TOP DEVICE TABS */}
             <TopTabs active={device} onChange={handleDeviceChange} />

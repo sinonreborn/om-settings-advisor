@@ -1011,7 +1011,7 @@ function analyzeForecast(forecast, currentWeather) {
       gust: Math.round(forecast.windgusts_10m?.[i] || 0),
       cloud: forecast.cloudcover[i],
       rainProb: forecast.precipitation_probability?.[i] || 0,
-      isDay: forecast.is_day?.[i] || 1,
+      isDay: forecast.is_day?.[i] ?? 1,
     });
   }
   let nextSun = null, nextRain = null;

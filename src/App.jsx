@@ -1049,9 +1049,60 @@ function WeatherOrb({ weather }) {
   const isRain = c >= 51 && c <= 67;
   const isSnow = c >= 71 && c <= 77;
   const isStorm = c >= 80;
+  const isClearNight = isN && isClear;
 
+  // Special render path: clear night — proper waning-crescent moon on a dark starry backdrop.
+  if (isClearNight) {
+    return (
+      <div style={{ position: "relative", width: 72, height: 72, flexShrink: 0 }}>
+        {/* Outer glow */}
+        <div style={{
+          position: "absolute", inset: -6, borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(220,225,240,0.14), transparent 60%)",
+          filter: "blur(6px)",
+        }} />
+        <svg viewBox="0 0 72 72" style={{ position: "absolute", inset: 0, width: 72, height: 72 }}>
+          <defs>
+            <radialGradient id="nightSky" cx="0.45" cy="0.4" r="0.7">
+              <stop offset="0%" stopColor="#252a42" />
+              <stop offset="60%" stopColor="#12152a" />
+              <stop offset="100%" stopColor="#0a0c18" />
+            </radialGradient>
+            <mask id="moonCrescent">
+              {/* White everywhere means "keep". Black disc offset to the upper-right "carves out" crescent. */}
+              <rect width="72" height="72" fill="black" />
+              <circle cx="36" cy="36" r="17" fill="white" />
+              <circle cx="44" cy="30" r="14.5" fill="black" />
+            </mask>
+          </defs>
+
+          {/* Dark sky disc (backdrop) */}
+          <circle cx="36" cy="36" r="34" fill="url(#nightSky)" />
+
+          {/* Stars — a few faint dots scattered where they won't clash with the moon */}
+          <g fill="#e8ecf6">
+            <circle cx="16" cy="18" r="0.9" opacity="0.8" />
+            <circle cx="24" cy="50" r="0.7" opacity="0.55" />
+            <circle cx="54" cy="56" r="0.8" opacity="0.65" />
+            <circle cx="60" cy="22" r="0.6" opacity="0.5" />
+            <circle cx="14" cy="40" r="0.5" opacity="0.4" />
+            <circle cx="50" cy="14" r="0.55" opacity="0.45" />
+          </g>
+
+          {/* The moon — a full white disc with a darker disc masking out the crescent shadow */}
+          <g mask="url(#moonCrescent)">
+            <circle cx="36" cy="36" r="17" fill="#f4f2ea" />
+          </g>
+          {/* Subtle warm glow behind the moon to lift it off the sky */}
+          <circle cx="36" cy="36" r="19" fill="#f4f2ea" opacity="0.08" />
+        </svg>
+      </div>
+    );
+  }
+
+  // All other conditions: the old stylised-sphere approach with Unicode char
   let centreColor, edgeColor, iconChar;
-  if (isN) { centreColor = "#6a7096"; edgeColor = "#1a1d30"; iconChar = isClear ? "☽" : "☁"; }
+  if (isN) { centreColor = "#6a7096"; edgeColor = "#1a1d30"; iconChar = "☁"; }
   else if (isClear) { centreColor = "#f4d890"; edgeColor = "#8a6830"; iconChar = "☀"; }
   else if (isPartly) { centreColor = "#d4c088"; edgeColor = "#6a5c40"; iconChar = "⛅"; }
   else if (isOvercast) { centreColor = "#a0a0a0"; edgeColor = "#484848"; iconChar = "☁"; }
@@ -1188,11 +1239,45 @@ function ConditionsDash({ weather, forecast, weatherLive, locationLabel, device 
                   }}>GUST {gustNow}</div>
                 )}
               </div>
-              <div style={{ fontSize: 13, color: T.textMid, marginBottom: 6 }}>{wi.label} · {locationLabel || "Location"}</div>
-              <div style={{ display: "flex", gap: 14, fontSize: 11, color: T.textDim, fontFamily: "'JetBrains Mono', monospace" }}>
-                <span><span style={{ color: lightColor }}>●</span> {lightLabel}</span>
-                <span><span style={{ color: wind > 19 ? T.red : wind > 12 ? T.wrn : T.grn }}>●</span> {wind} mph</span>
-                <span><span style={{ color: droneColour }}>●</span> 🚁 {droneLabel}</span>
+              <div style={{ fontSize: 13, color: T.textMid, marginBottom: 10 }}>{wi.label} · {locationLabel || "Location"}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "5px 10px", borderRadius: 10,
+                  background: "rgba(0, 0, 0, 0.28)",
+                  border: `1px solid ${T.stroke}`,
+                  fontSize: 11, color: T.textMid,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  lineHeight: 1.2,
+                }}>
+                  <span style={{ color: lightColor, fontSize: 9, lineHeight: 1 }}>●</span>
+                  {lightLabel}
+                </span>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "5px 10px", borderRadius: 10,
+                  background: "rgba(0, 0, 0, 0.28)",
+                  border: `1px solid ${T.stroke}`,
+                  fontSize: 11, color: T.textMid,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  lineHeight: 1.2,
+                }}>
+                  <span style={{ color: wind > 19 ? T.red : wind > 12 ? T.wrn : T.grn, fontSize: 9, lineHeight: 1 }}>●</span>
+                  {wind} mph
+                </span>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "5px 10px", borderRadius: 10,
+                  background: "rgba(0, 0, 0, 0.28)",
+                  border: `1px solid ${T.stroke}`,
+                  fontSize: 11, color: T.textMid,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  lineHeight: 1.2,
+                }}>
+                  <span style={{ color: droneColour, fontSize: 9, lineHeight: 1 }}>●</span>
+                  <span style={{ fontSize: 12, lineHeight: 1 }}>🚁</span>
+                  {droneLabel}
+                </span>
               </div>
             </div>
           </div>

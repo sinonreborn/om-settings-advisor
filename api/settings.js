@@ -51,6 +51,7 @@ export default async function handler(req, res) {
           'with no brackets, alternatives or explanation. Examples: "f/6.3", "1/2500s", "Auto ≤12800".',
           'Every other single-value field is one short line (under 90 characters).',
           'Reasoning, alternatives and caveats belong only in "why" and "tips".',
+          'Only ever name lenses listed in the prompt: "would_swap" must be one of the IN BAG lenses, or null.',
         ].join(' '),
         messages: [{ role: 'user', content: prompt }],
       }),

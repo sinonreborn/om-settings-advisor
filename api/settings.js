@@ -34,8 +34,14 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        // claude-sonnet-4-20250514 was retired on 15 June 2026 (requests returned 404).
+        model: 'claude-sonnet-5-5',
         max_tokens: 2500,
+        // Sonnet 5.5 thinks by default and thinking shares max_tokens with the answer.
+        // The app only needs a short JSON reply, so use the lowest thinking setting:
+        // with no tools in the request, the response is text only.
+        thinking: { type: 'between_tools' },
+        output_config: { effort: 'medium' },
         messages: [{ role: 'user', content: prompt }],
       }),
     });

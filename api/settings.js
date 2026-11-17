@@ -34,8 +34,25 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        // claude-sonnet-4-20250514 was retired on 15 June 2026 (requests returned 404).
+        model: 'claude-sonnet-5-5',
         max_tokens: 2500,
+        // Sonnet 5.5 thinks by default and thinking shares max_tokens with the answer.
+        // The app only needs a short JSON reply, so use the lowest thinking setting:
+        // with no tools in the request, the response is text only.
+        thinking: { type: 'between_tools' },
+        output_config: { effort: 'low' },
+        // Newer models explain more than the old one did. The app shows these values
+        // in small cards, so keep them to the bare setting.
+        system: [
+          'Your reply is shown in a phone app on small cards. Reply with the JSON object only.',
+          'Follow the field formats in the prompt literally and keep every value short.',
+          'aperture, shutter_speed and iso must be the bare setting only, 16 characters or fewer,',
+          'with no brackets, alternatives or explanation. Examples: "f/6.3", "1/2500s", "Auto ≤12800".',
+          'Every other single-value field is one short line (under 90 characters).',
+          'Reasoning, alternatives and caveats belong only in "why" and "tips".',
+          'Only ever name lenses listed in the prompt: "would_swap" must be one of the IN BAG lenses, or null.',
+        ].join(' '),
         messages: [{ role: 'user', content: prompt }],
       }),
     });
